@@ -6,10 +6,39 @@ const logger = require('./utils/logger');
 
 const PORT = config.port;
 
-// Test database connection
+// Test database connection and run migrations
+const { Umzug, SequelizeStorage } = require('umzug');
+const path = require('path');
+
 sequelize.authenticate()
-  .then(() => {
+  .then(async () => {
     logger.info('Database connection established successfully');
+
+    // Auto-run migrations on startup
+    if (config.nodeEnv === 'production') {
+      try {
+        const umzug = new Umzug({
+          migrations: {
+            glob: path.join(__dirname, 'migrations/*.js'),
+            resolve: ({ name, path: migPath, context }) => {
+              const migration = require(migPath);
+              return { name, up: async () => migration.up(context, sequelize.constructor), down: async () => migration.down(context, sequelize.constructor) };
+            }
+          },
+          context: sequelize.getQueryInterface(),
+          storage: new SequelizeStorage({ sequelize }),
+          logger: { info: (msg) => logger.info('[migrate] ' + JSON.stringify(msg)) }
+        });
+        const pending = await umzug.pending();
+        if (pending.length > 0) {
+          logger.info(`Running ${pending.length} pending migration(s)...`);
+          await umzug.up();
+          logger.info('Migrations complete');
+        }
+      } catch (err) {
+        logger.error('Migration error:', err.message);
+      }
+    }
   })
   .catch(err => {
     logger.error('Unable to connect to database:', err);
