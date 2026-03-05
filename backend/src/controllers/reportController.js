@@ -56,6 +56,8 @@ function buildWhereClause(query, requestingUser) {
   return where;
 }
 
+const { TaskAssignment } = require('../models');
+
 const TASK_INCLUDES = [
   { model: Company, as: 'company', attributes: ['id', 'name'] },
   { model: Department, as: 'department', attributes: ['id', 'name'] },
@@ -65,9 +67,11 @@ const TASK_INCLUDES = [
     attributes: ['id', 'name', 'email', 'phone', 'designation'],
     include: [{ model: User, as: 'manager', attributes: ['id', 'name'] }]
   },
+  { model: User, as: 'creator', attributes: ['id', 'name', 'email', 'phone'] },
   {
-    model: User, as: 'creator',
-    attributes: ['id', 'name', 'email', 'phone']
+    model: User, as: 'collaborators',
+    attributes: ['id', 'name', 'email'],
+    through: { attributes: [] }
   }
 ];
 
@@ -256,7 +260,7 @@ class ReportController {
         'ID', 'Company', 'Task Title', 'Description', 'Priority', 'Status',
         'Assigned To', 'Assignee Email', 'Manager',
         'Department', 'Location', 'Raised By', 'Raised By Contact',
-        'Created Date', 'Due Date', 'Completed At'
+        'Created Date', 'Due Date', 'Completed At', 'Collaborators'
       ].join(',');
 
       const csvRows = tasks.map(t => [
@@ -275,7 +279,8 @@ class ReportController {
         t.creator?.phone || '',
         t.created_at ? new Date(t.created_at).toLocaleDateString() : '',
         t.due_date || '',
-        t.completed_at ? new Date(t.completed_at).toLocaleDateString() : ''
+        t.completed_at ? new Date(t.completed_at).toLocaleDateString() : '',
+        `"${(t.collaborators || []).map(c => c.name).join('; ')}"`
       ].join(','));
 
       const csvContent = [csvHeader, ...csvRows].join('\n');
@@ -319,7 +324,8 @@ class ReportController {
       const TASK_HEADERS = [
         'ID', 'Company', 'Task Title', 'Description', 'Priority', 'Status',
         'Assigned To', 'Assignee Email', 'Manager', 'Department', 'Location',
-        'Raised By', 'Raised By Contact', 'Created Date', 'Due Date', 'Completed At'
+        'Raised By', 'Raised By Contact', 'Created Date', 'Due Date', 'Completed At',
+        'Collaborators'
       ];
 
       const SUMMARY_HEADERS = [
@@ -343,7 +349,8 @@ class ReportController {
         t.creator?.phone || '',
         t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
         t.due_date ? String(t.due_date).split('T')[0] : '',
-        t.completed_at ? new Date(t.completed_at).toISOString().split('T')[0] : ''
+        t.completed_at ? new Date(t.completed_at).toISOString().split('T')[0] : '',
+        (t.collaborators || []).map(c => c.name).join('; ')
       ];
 
       const summarizeGroup = (label, tasks) => [
@@ -541,7 +548,8 @@ class ReportController {
       const csvHeader = [
         'ID', 'Company', 'Task Title', 'Description', 'Priority', 'Status',
         'Assigned To', 'Assignee Email', 'Manager', 'Department', 'Location',
-        'Raised By', 'Raised By Contact', 'Created Date', 'Due Date', 'Completed At'
+        'Raised By', 'Raised By Contact', 'Created Date', 'Due Date', 'Completed At',
+        'Collaborators'
       ].join(',');
 
       const csvRows = tasks.map(t => [
@@ -560,7 +568,8 @@ class ReportController {
         t.creator?.phone || '',
         t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
         t.due_date || '',
-        t.completed_at ? new Date(t.completed_at).toISOString().split('T')[0] : ''
+        t.completed_at ? new Date(t.completed_at).toISOString().split('T')[0] : '',
+        `"${(t.collaborators || []).map(c => c.name).join('; ')}"`
       ].join(','));
 
       const csv = [csvHeader, ...csvRows].join('\n');

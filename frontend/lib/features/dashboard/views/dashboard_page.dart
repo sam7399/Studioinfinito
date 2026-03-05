@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,22 +8,152 @@ import 'package:intl/intl.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../providers/stats_provider.dart';
 
-class DashboardPage extends ConsumerWidget {
+// Resets to false on logout so the quote shows again on next login.
+bool _quoteShownThisSession = false;
+
+const _quotes = [
+  _Quote('The secret of getting ahead is getting started.', 'Mark Twain'),
+  _Quote('It always seems impossible until it\'s done.', 'Nelson Mandela'),
+  _Quote('Don\'t watch the clock; do what it does. Keep going.', 'Sam Levenson'),
+  _Quote('The only way to do great work is to love what you do.', 'Steve Jobs'),
+  _Quote('Success is not final, failure is not fatal: it is the courage to continue that counts.', 'Winston Churchill'),
+  _Quote('Believe you can and you\'re halfway there.', 'Theodore Roosevelt'),
+  _Quote('In the middle of every difficulty lies opportunity.', 'Albert Einstein'),
+  _Quote('Your time is limited, so don\'t waste it living someone else\'s life.', 'Steve Jobs'),
+  _Quote('The best time to plant a tree was 20 years ago. The second best time is now.', 'Chinese Proverb'),
+  _Quote('You miss 100% of the shots you don\'t take.', 'Wayne Gretzky'),
+  _Quote('Whether you think you can or you think you can\'t, you\'re right.', 'Henry Ford'),
+  _Quote('The harder I work, the luckier I get.', 'Samuel Goldwyn'),
+  _Quote('Quality means doing it right when no one is looking.', 'Henry Ford'),
+  _Quote('Opportunities don\'t happen. You create them.', 'Chris Grosser'),
+  _Quote('Success usually comes to those who are too busy to be looking for it.', 'Henry David Thoreau'),
+  _Quote('Don\'t be afraid to give up the good to go for the great.', 'John D. Rockefeller'),
+  _Quote('I find that the harder I work, the more luck I seem to have.', 'Thomas Jefferson'),
+  _Quote('The way to get started is to quit talking and begin doing.', 'Walt Disney'),
+  _Quote('If you are not willing to risk the usual, you will have to settle for the ordinary.', 'Jim Rohn'),
+  _Quote('Great things in business are never done by one person; they\'re done by a team of people.', 'Steve Jobs'),
+  _Quote('Coming together is a beginning, staying together is progress, and working together is success.', 'Henry Ford'),
+  _Quote('The secret to getting ahead is getting started. The secret to getting started is breaking your complex tasks into small manageable tasks.', 'Mark Twain'),
+  _Quote('Nothing will work unless you do.', 'Maya Angelou'),
+  _Quote('Strive not to be a success, but rather to be of value.', 'Albert Einstein'),
+  _Quote('You don\'t have to be great to start, but you have to start to be great.', 'Zig Ziglar'),
+];
+
+class _Quote {
+  final String text;
+  final String author;
+  const _Quote(this.text, this.author);
+}
+
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends ConsumerState<DashboardPage> {
+  late Timer _timer;
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Rebuild every minute so greeting updates automatically.
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    // Show motivational quote once per login session.
+    if (!_quoteShownThisSession) {
+      _quoteShownThisSession = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showQuoteDialog();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  void _showQuoteDialog() {
+    final quote = _quotes[Random().nextInt(_quotes.length)];
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.format_quote,
+                    color: Color(0xFF3B82F6), size: 28),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '"${quote.text}"',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontStyle: FontStyle.italic,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '— ${quote.author}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF3B82F6),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Let\'s get to work!'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Reset flag when the user logs out so next login shows the quote again.
+    ref.listen(authProvider, (prev, next) {
+      if (prev?.isAuthenticated == true && !next.isAuthenticated) {
+        _quoteShownThisSession = false;
+      }
+    });
+
     final user = ref.watch(authProvider).user;
     final statsAsync = ref.watch(statsProvider);
     final isManagement =
         user?.role == 'superadmin' || user?.role == 'management';
     final isSuperAdmin = user?.role == 'superadmin';
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12
-        ? 'Good Morning'
-        : hour < 17
-            ? 'Good Afternoon'
-            : 'Good Evening';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -38,7 +170,7 @@ class DashboardPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '$greeting, ${user?.fullName ?? 'User'}!',
+                        '$_greeting, ${user?.fullName ?? 'User'}!',
                         style: Theme.of(context)
                             .textTheme
                             .headlineSmall

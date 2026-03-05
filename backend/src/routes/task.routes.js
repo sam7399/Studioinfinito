@@ -42,7 +42,7 @@ router.get(
   taskController.getTask
 );
 
-// Create task
+// Create task (supports multi-assignee via assigned_to_ids, visibility, dependency)
 router.post(
   '/',
   celebrate({
@@ -52,6 +52,9 @@ router.post(
       priority: Joi.string().valid('low', 'normal', 'high', 'urgent').default('normal'),
       status: Joi.string().valid('open', 'in_progress', 'complete_pending_review', 'finalized', 'reopened').default('open'),
       assigned_to: Joi.number().integer().required(),
+      assigned_to_ids: Joi.array().items(Joi.number().integer()).default([]),
+      show_collaborators: Joi.boolean().default(true),
+      depends_on_task_id: Joi.number().integer().allow(null),
       department_id: Joi.number().integer().required(),
       location_id: Joi.number().integer().required(),
       due_date: Joi.date().iso().required(),
@@ -60,6 +63,15 @@ router.post(
     })
   }),
   taskController.createTask
+);
+
+// Get workload summary for a user (for popup before assigning)
+router.get(
+  '/workload/:userId',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ userId: Joi.number().integer().required() })
+  }),
+  taskController.getUserWorkloadSummary
 );
 
 // Update task

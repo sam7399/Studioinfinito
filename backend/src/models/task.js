@@ -95,6 +95,20 @@ module.exports = (sequelize, DataTypes) => {
     last_review_reminder_at: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    show_collaborators: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
+    },
+    escalation_level: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    last_escalation_at: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   }, {
     tableName: 'tasks',
@@ -183,6 +197,27 @@ module.exports = (sequelize, DataTypes) => {
     Task.hasMany(models.TaskActivity, {
       foreignKey: 'task_id',
       as: 'activities',
+      onUpdate: 'CASCADE',
+      onDelete: 'CASCADE'
+    });
+
+    Task.hasMany(models.TaskAssignment, {
+      foreignKey: 'task_id',
+      as: 'assignments',
+      onUpdate: 'CASCADE',
+      onDelete: 'CASCADE'
+    });
+
+    Task.belongsToMany(models.User, {
+      through: models.TaskAssignment,
+      foreignKey: 'task_id',
+      otherKey: 'user_id',
+      as: 'collaborators'
+    });
+
+    Task.hasMany(models.TaskDependency, {
+      foreignKey: 'task_id',
+      as: 'dependencies',
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE'
     });

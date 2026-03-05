@@ -2,8 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../core/networking/dio_client.dart';
 import '../providers/task_provider.dart';
 import '../../org/providers/org_provider.dart';
+
+// userId → active task count for workload dot
+final _workloadSingleProvider = FutureProvider.autoDispose<Map<int, int>>((ref) async {
+  final dio = ref.watch(dioProvider);
+  try {
+    final res = await dio.get(ApiConstants.reportSummary);
+    final List byUser = res.data['data']['byUser'] ?? [];
+    final map = <int, int>{};
+    for (final row in byUser) {
+      final uid = (row['assignee'] as Map?)?['id'] as int?;
+      if (uid != null) {
+        map[uid] = ((row['open'] as num?)?.toInt() ?? 0) +
+            ((row['in_progress'] as num?)?.toInt() ?? 0);
+      }
+    }
+    return map;
+  } catch (_) {
+    return {};
+  }
+});
+
+Color _wColor(int n) {
+  if (n <= 3) return const Color(0xFF16A34A);
+  if (n <= 6) return const Color(0xFFD97706);
+  return const Color(0xFFDC2626);
+}
+
+String _wLabel(int n) {
+  if (n == 0) return 'Free';
+  if (n <= 3) return '$n active – Light';
+  if (n <= 6) return '$n active – Moderate';
+  return '$n active – Heavy';
+}
 
 class TaskCreatePage extends ConsumerStatefulWidget {
   const TaskCreatePage({super.key});
@@ -22,6 +57,7 @@ class _TaskCreatePageState extends ConsumerState<TaskCreatePage> {
   int? _departmentId;
   int? _locationId;
   DateTime _dueDate = DateTime.now().add(const Duration(days: 3));
+  bool _showCollaborators = true;
   bool _loading = false;
   String? _error;
 
@@ -57,6 +93,7 @@ class _TaskCreatePageState extends ConsumerState<TaskCreatePage> {
       'department_id': _departmentId,
       'location_id': _locationId,
       'due_date': _dueDate.toIso8601String(),
+      'show_collaborators': _showCollaborators,
     };
 
     final ok = await ref.read(taskProvider.notifier).createTask(data);
@@ -74,9 +111,14 @@ class _TaskCreatePageState extends ConsumerState<TaskCreatePage> {
 
   @override
   Widget build(BuildContext context) {
-    final users = ref.watch(allUsersProvider).maybeWhen(data: (d) => d, orElse: () => <OrgItem>[]);
+    final usersAsync = ref.watch(allUsersProvider);
+    final users = usersAsync.maybeWhen(data: (d) => d, orElse: () => <OrgItem>[]);
+    final usersLoading = usersAsync.isLoading;
     final depts = ref.watch(departmentsProvider(null)).maybeWhen(data: (d) => d, orElse: () => <OrgItem>[]);
     final locs = ref.watch(locationsProvider(null)).maybeWhen(data: (d) => d, orElse: () => <OrgItem>[]);
+    final workload = ref.watch(_workloadSingleProvider).maybeWhen(data: (d) => d, orElse: () => <int, int>{});
+
+    final selectedUserWorkload = _assignedTo != null ? (workload[_assignedTo] ?? 0) : -1;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -153,21 +195,57 @@ class _TaskCreatePageState extends ConsumerState<TaskCreatePage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Assign To
+                    // Assign To + workload indicator
                     DropdownButtonFormField<int>(
                       value: _assignedTo,
-                      decoration: const InputDecoration(
-                          labelText: 'Assign To *',
-                          border: OutlineInputBorder()),
+                      decoration: InputDecoration(
+                          labelText: usersLoading ? 'Loading users...' : 'Assign To *',
+                          border: const OutlineInputBorder()),
                       isExpanded: true,
-                      items: users
-                          .map((u) => DropdownMenuItem(
-                              value: u.id, child: Text(u.name, overflow: TextOverflow.ellipsis)))
-                          .toList(),
+                      items: users.map((u) {
+                        final count = workload[u.id] ?? 0;
+                        final color = _wColor(count);
+                        return DropdownMenuItem(
+                          value: u.id,
+                          child: Row(children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                            ),
+                            Expanded(child: Text(u.name, overflow: TextOverflow.ellipsis)),
+                            Text('$count', style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+                          ]),
+                        );
+                      }).toList(),
                       onChanged: (v) => setState(() => _assignedTo = v),
-                      validator: (v) =>
-                          v == null ? 'Please select a user' : null,
+                      validator: (v) => v == null ? 'Please select a user' : null,
                     ),
+
+                    // Workload info banner when user selected
+                    if (selectedUserWorkload >= 0) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _wColor(selectedUserWorkload).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _wColor(selectedUserWorkload).withValues(alpha: 0.3)),
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 8, height: 8,
+                            decoration: BoxDecoration(color: _wColor(selectedUserWorkload), shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _wLabel(selectedUserWorkload),
+                            style: TextStyle(fontSize: 12, color: _wColor(selectedUserWorkload), fontWeight: FontWeight.w600),
+                          ),
+                        ]),
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // Department & Location
@@ -226,6 +304,40 @@ class _TaskCreatePageState extends ConsumerState<TaskCreatePage> {
                           alignment: Alignment.centerLeft,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 14)),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Show collaborators toggle
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.people_outline, size: 18, color: Colors.grey.shade600),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Show collaborators to assignee', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              Text(
+                                _showCollaborators
+                                    ? 'Assignee can see all other people on this task.'
+                                    : 'Assignee will not see other collaborators.',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _showCollaborators,
+                          onChanged: (v) => setState(() => _showCollaborators = v),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ]),
                     ),
                     const SizedBox(height: 24),
 

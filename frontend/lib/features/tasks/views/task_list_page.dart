@@ -261,11 +261,24 @@ class _TaskCard extends StatelessWidget {
                         _Badge(label: task.status.replaceAll('_', ' '), color: _statusColor(task.status)),
                         const SizedBox(width: 6),
                         _Badge(label: task.priority, color: _priorityColor(task.priority)),
+                        if (task.escalationLevel > 0) ...[
+                          const SizedBox(width: 6),
+                          _EscalationBadge(level: task.escalationLevel),
+                        ],
                         if (task.assignedToName != null) ...[
                           const SizedBox(width: 6),
                           Icon(Icons.person_outline, size: 11, color: Colors.grey.shade500),
                           const SizedBox(width: 2),
                           Text(task.assignedToName!, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                        ],
+                        if (task.collaboratorNames.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.people_outline, size: 11, color: Colors.indigo.shade300),
+                          const SizedBox(width: 2),
+                          Text(
+                            '+${task.collaboratorNames.length}',
+                            style: TextStyle(fontSize: 11, color: Colors.indigo.shade400, fontWeight: FontWeight.w600),
+                          ),
                         ],
                         const Spacer(),
                         Icon(Icons.calendar_today_outlined, size: 12, color: isOverdue ? Colors.red : Colors.grey),
@@ -302,6 +315,29 @@ class _Badge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
       child: Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+class _EscalationBadge extends StatelessWidget {
+  final int level;
+  const _EscalationBadge({required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (level) {
+      1 => ('ESC L1', Colors.orange),
+      2 => ('ESC L2', Colors.deepOrange),
+      _ => ('CRITICAL', Colors.red),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.warning_amber_rounded, size: 9, color: color),
+        const SizedBox(width: 3),
+        Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.bold)),
+      ]),
     );
   }
 }

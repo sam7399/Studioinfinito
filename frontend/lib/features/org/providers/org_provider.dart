@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/networking/dio_client.dart';
+import '../../../auth/providers/auth_provider.dart';
 
 class OrgItem {
   final int id;
@@ -19,7 +20,8 @@ class OrgItem {
 }
 
 // Companies
-final companiesProvider = FutureProvider<List<OrgItem>>((ref) async {
+final companiesProvider = FutureProvider.autoDispose<List<OrgItem>>((ref) async {
+  if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
   final res = await dio.get(ApiConstants.companies);
   final List data = res.data['data'] ?? [];
@@ -27,7 +29,8 @@ final companiesProvider = FutureProvider<List<OrgItem>>((ref) async {
 });
 
 // Departments
-final departmentsProvider = FutureProvider.family<List<OrgItem>, int?>((ref, companyId) async {
+final departmentsProvider = FutureProvider.autoDispose.family<List<OrgItem>, int?>((ref, companyId) async {
+  if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
   final res = await dio.get(ApiConstants.departments,
       queryParameters: companyId != null ? {'company_id': companyId} : null);
@@ -36,7 +39,8 @@ final departmentsProvider = FutureProvider.family<List<OrgItem>, int?>((ref, com
 });
 
 // Locations
-final locationsProvider = FutureProvider.family<List<OrgItem>, int?>((ref, companyId) async {
+final locationsProvider = FutureProvider.autoDispose.family<List<OrgItem>, int?>((ref, companyId) async {
+  if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
   final res = await dio.get(ApiConstants.locations,
       queryParameters: companyId != null ? {'company_id': companyId} : null);
@@ -45,7 +49,8 @@ final locationsProvider = FutureProvider.family<List<OrgItem>, int?>((ref, compa
 });
 
 // All users (for task assignment dropdown)
-final allUsersProvider = FutureProvider<List<OrgItem>>((ref) async {
+final allUsersProvider = FutureProvider.autoDispose<List<OrgItem>>((ref) async {
+  if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/users', queryParameters: {'limit': 500});
   final List data = res.data['data']['users'] ?? [];
@@ -58,8 +63,9 @@ final allUsersProvider = FutureProvider<List<OrgItem>>((ref) async {
       .toList();
 });
 
-// Managers dropdown — only users who can manage others
-final managersDropdownProvider = FutureProvider<List<OrgItem>>((ref) async {
+// Managers dropdown
+final managersDropdownProvider = FutureProvider.autoDispose<List<OrgItem>>((ref) async {
+  if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/users', queryParameters: {'limit': 500});
   final List data = res.data['data']['users'] ?? [];
@@ -70,8 +76,9 @@ final managersDropdownProvider = FutureProvider<List<OrgItem>>((ref) async {
       .toList();
 });
 
-// Department heads dropdown — department_head / management / superadmin only
-final deptHeadsDropdownProvider = FutureProvider<List<OrgItem>>((ref) async {
+// Department heads dropdown
+final deptHeadsDropdownProvider = FutureProvider.autoDispose<List<OrgItem>>((ref) async {
+  if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/users', queryParameters: {'limit': 500});
   final List data = res.data['data']['users'] ?? [];

@@ -17,6 +17,8 @@ class TaskModel {
   final double? estimatedHours;
   final int progressPercent;
   final List<String> tags;
+  final List<String> collaboratorNames;
+  final int escalationLevel;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -39,6 +41,8 @@ class TaskModel {
     this.estimatedHours,
     this.progressPercent = 0,
     required this.tags,
+    this.collaboratorNames = const [],
+    this.escalationLevel = 0,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -49,6 +53,11 @@ class TaskModel {
       status != 'finalized';
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
+    final collabs = (json['collaborators'] as List<dynamic>? ?? [])
+        .map((c) => (c as Map<String, dynamic>?)?['name'] as String? ?? '')
+        .where((n) => n.isNotEmpty)
+        .toList();
+
     return TaskModel(
       id: json['id'],
       title: json['title'] ?? '',
@@ -72,6 +81,8 @@ class TaskModel {
       estimatedHours: (json['estimated_hours'] as num?)?.toDouble(),
       progressPercent: (json['progress_percent'] as num?)?.toInt() ?? 0,
       tags: List<String>.from(json['tags'] ?? []),
+      collaboratorNames: collabs,
+      escalationLevel: (json['escalation_level'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );

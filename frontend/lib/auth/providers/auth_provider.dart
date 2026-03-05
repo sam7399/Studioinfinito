@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_model.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/networking/dio_client.dart';
+import '../../core/networking/token_service.dart';
 import '../../core/storage/storage_service.dart';
 
 class AuthState {
@@ -51,6 +52,7 @@ class AuthNotifier extends Notifier<AuthState> {
     final userJson = await StorageService.getUserJson();
     if (token != null && userJson != null) {
       final user = UserModel.fromJson(jsonDecode(userJson));
+      TokenService.instance.setToken(token);
       _dio.options.headers['Authorization'] = 'Bearer $token';
       state = AuthState(token: token, user: user);
     }
@@ -71,6 +73,7 @@ class AuthNotifier extends Notifier<AuthState> {
       await StorageService.saveToken(token);
       await StorageService.saveUserJson(jsonEncode(user.toJson()));
 
+      TokenService.instance.setToken(token);
       _dio.options.headers['Authorization'] = 'Bearer $token';
       state = AuthState(token: token, user: user);
       return true;
@@ -81,7 +84,6 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
-  /// Call this after a successful password change to clear forcePasswordChange flag.
   Future<void> clearForcePasswordChange() async {
     final user = state.user;
     if (user == null) return;
@@ -102,6 +104,7 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
+    TokenService.instance.setToken(null);
     _dio.options.headers.remove('Authorization');
     await StorageService.clearAll();
     state = const AuthState();

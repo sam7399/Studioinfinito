@@ -248,9 +248,15 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
 
     await showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlg) {
-          final filtered = users
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final freshUsers = ref.watch(allUsersProvider).maybeWhen(
+            data: (d) => d,
+            orElse: () => users,
+          );
+          return StatefulBuilder(
+            builder: (ctx, setDlg) {
+          final filtered = freshUsers
               .where((u) =>
                   u.name.toLowerCase().contains(search.toLowerCase()))
               .toList()
@@ -391,7 +397,9 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
             ],
           );
         },
-      ),
+      );
+    },
+  ),
     );
   }
 

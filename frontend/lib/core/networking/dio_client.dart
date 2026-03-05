@@ -1,13 +1,14 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/api_constants.dart';
+import 'token_service.dart';
 
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
       baseUrl: ApiConstants.baseUrl,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
+      connectTimeout: const Duration(seconds: 90),
+      receiveTimeout: const Duration(seconds: 90),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -15,10 +16,15 @@ final dioProvider = Provider<Dio>((ref) {
     ),
   );
 
+  // Auth interceptor: reads token at REQUEST time, not at provider build time.
+  // This eliminates all timing issues with async session restoration.
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) {
-        // Token is injected by authDioProvider — this client is for public calls
+        final token = TokenService.instance.token;
+        if (token != null && !options.headers.containsKey('Authorization')) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
         handler.next(options);
       },
       onError: (error, handler) {
@@ -30,11 +36,4 @@ final dioProvider = Provider<Dio>((ref) {
   return dio;
 });
 
-/// Dio instance that automatically attaches the JWT from secure storage.
-/// Import and use this in authenticated services.
-final authDioProvider = Provider<Dio>((ref) {
-  // We read the token lazily inside the interceptor so it always reflects
-  // the current value without recreating the Dio instance.
-  final dio = ref.watch(dioProvider);
-  return dio;
-});
+final authDioProvider = Provider<Dio>((ref) => ref.watch(dioProvider));

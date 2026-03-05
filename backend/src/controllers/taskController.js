@@ -268,6 +268,19 @@ class TaskController {
       next(error);
     }
   }
+
+  static async getUserWorkloadSummary(req, res, next) {
+    try {
+      const summary = await TaskService.getUserWorkloadSummary(
+        parseInt(req.params.userId, 10),
+        req.user
+      );
+      res.json({ success: true, data: summary });
+    } catch (error) {
+      logger.error('Workload summary error:', error);
+      next(error);
+    }
+  }
 }
 
 module.exports = TaskController;

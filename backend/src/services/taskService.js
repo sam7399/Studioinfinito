@@ -1,8 +1,54 @@
-const { Task, User, Department, Location, Company, TaskActivity, TaskReview } = require('../models');
+const { Task, User, Department, Location, Company, TaskActivity, TaskReview, TaskAssignment, TaskDependency } = require('../models');
 const { Op } = require('sequelize');
 const RBACService = require('./rbacService');
 const logger = require('../utils/logger');
 const Mailer = require('../mail/mailer');
+
+// Standard includes for task queries
+const TASK_INCLUDES = [
+  { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
+  { model: User, as: 'assignee', attributes: ['id', 'name', 'email'] },
+  { model: Department, as: 'department', attributes: ['id', 'name'] },
+  { model: Location, as: 'location', attributes: ['id', 'name'] },
+  { model: Company, as: 'company', attributes: ['id', 'name'] },
+  {
+    model: User, as: 'collaborators',
+    attributes: ['id', 'name', 'email'],
+    through: { attributes: [] }
+  },
+  {
+    model: TaskDependency, as: 'dependencies',
+    include: [{
+      model: Task, as: 'dependsOn',
+      attributes: ['id', 'title', 'status']
+    }]
+  }
+];
+
+/**
+ * Apply cross-department privacy: mask sensitive fields if viewer is in a different dept.
+ */
+function applyPrivacy(task, viewerDeptId) {
+  const taskJson = task.toJSON ? task.toJSON() : { ...task };
+  if (viewerDeptId && taskJson.department_id && taskJson.department_id !== viewerDeptId) {
+    taskJson.title = '***';
+    taskJson.description = '***';
+    taskJson._restricted = true;
+  }
+  return taskJson;
+}
+
+/**
+ * Build collaborator list respecting show_collaborators flag.
+ */
+function buildCollaboratorView(task, viewerUserId) {
+  const t = task.toJSON ? task.toJSON() : { ...task };
+  if (!t.show_collaborators) {
+    // Only show the viewer themselves
+    t.collaborators = (t.collaborators || []).filter(c => c.id === viewerUserId);
+  }
+  return t;
+}
 
 class TaskService {
   /**
@@ -55,20 +101,22 @@ class TaskService {
     // Query tasks
     const { count, rows: tasks } = await Task.findAndCountAll({
       where,
-      include: [
-        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
-        { model: User, as: 'assignee', attributes: ['id', 'name', 'email'] },
-        { model: Department, as: 'department', attributes: ['id', 'name'] },
-        { model: Location, as: 'location', attributes: ['id', 'name'] },
-        { model: Company, as: 'company', attributes: ['id', 'name'] }
-      ],
+      include: TASK_INCLUDES,
       order: [[sort_by, sort_order.toUpperCase()]],
       limit: parseInt(limit),
-      offset: parseInt(offset)
+      offset: parseInt(offset),
+      distinct: true
+    });
+
+    // Apply privacy masking and collaborator visibility
+    const processedTasks = tasks.map(t => {
+      let taskData = buildCollaboratorView(t, user.id);
+      taskData = applyPrivacy(taskData, user.department_id);
+      return taskData;
     });
 
     return {
-      tasks,
+      tasks: processedTasks,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -82,83 +130,144 @@ class TaskService {
    * Get task by ID
    */
   static async getTaskById(taskId, user) {
-    const task = await Task.findByPk(taskId, {
-      include: [
-        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
-        { model: User, as: 'assignee', attributes: ['id', 'name', 'email'] },
-        { model: Department, as: 'department', attributes: ['id', 'name'] },
-        { model: Location, as: 'location', attributes: ['id', 'name'] },
-        { model: Company, as: 'company', attributes: ['id', 'name'] }
-      ]
-    });
+    const task = await Task.findByPk(taskId, { include: TASK_INCLUDES });
 
     if (!task) {
       throw new Error('Task not found');
     }
 
-    // Check if user can view this task
     const canView = await RBACService.canViewTask(user, task);
     if (!canView) {
       throw new Error('Permission denied');
     }
 
-    return task;
+    let taskData = buildCollaboratorView(task, user.id);
+    taskData = applyPrivacy(taskData, user.department_id);
+    return taskData;
+  }
+
+  /**
+   * Get workload summary for a specific user (for popup)
+   */
+  static async getUserWorkloadSummary(targetUserId, requestingUser) {
+    const targetUser = await User.findByPk(targetUserId, {
+      attributes: ['id', 'name', 'email'],
+      include: [{ model: Department, as: 'department', attributes: ['id', 'name'] }]
+    });
+    if (!targetUser) throw new Error('User not found');
+
+    const now = new Date();
+
+    const [open, inProgress, overdue, upcoming] = await Promise.all([
+      Task.count({ where: { assigned_to_user_id: targetUserId, status: 'open' } }),
+      Task.count({ where: { assigned_to_user_id: targetUserId, status: 'in_progress' } }),
+      Task.count({
+        where: {
+          assigned_to_user_id: targetUserId,
+          status: { [Op.notIn]: ['finalized', 'cancelled'] },
+          due_date: { [Op.lt]: now }
+        }
+      }),
+      Task.findAll({
+        where: {
+          assigned_to_user_id: targetUserId,
+          status: { [Op.notIn]: ['finalized', 'cancelled'] },
+          due_date: { [Op.gte]: now }
+        },
+        order: [['due_date', 'ASC']],
+        limit: 5,
+        attributes: ['id', 'title', 'due_date', 'priority', 'status']
+      })
+    ]);
+
+    return {
+      user: {
+        id: targetUser.id,
+        name: targetUser.name,
+        department: targetUser.department?.name || 'N/A'
+      },
+      open_tasks: open,
+      in_progress_tasks: inProgress,
+      overdue_tasks: overdue,
+      upcoming_deadlines: upcoming.map(t => ({
+        id: t.id,
+        title: t.title,
+        due_date: t.due_date,
+        priority: t.priority
+      }))
+    };
   }
 
   /**
    * Create new task
    */
   static async createTask(taskData, user) {
-    // Set creator
     taskData.created_by_user_id = user.id;
 
-    // Validate assigned user exists and is in same company
+    // Support both single (assigned_to) and multi (assigned_to_ids) assignees
+    const extraAssigneeIds = Array.isArray(taskData.assigned_to_ids)
+      ? taskData.assigned_to_ids.filter(id => id !== taskData.assigned_to)
+      : [];
+    delete taskData.assigned_to_ids;
+
+    // Validate primary assignee
     const assignee = await User.findByPk(taskData.assigned_to);
-    if (!assignee) {
-      throw new Error('Assigned user not found');
-    }
+    if (!assignee) throw new Error('Assigned user not found');
 
     if (user.role !== 'superadmin' && assignee.company_id !== user.company_id) {
       throw new Error('Cannot assign task to user from different company');
     }
 
-    // Use creator's company_id; fall back to assignee's for superadmin with no company
     taskData.company_id = user.company_id || assignee.company_id;
-    if (!taskData.company_id) {
-      throw new Error('Cannot determine company for task');
-    }
+    if (!taskData.company_id) throw new Error('Cannot determine company for task');
+
+    // Handle depends_on
+    const dependsOnId = taskData.depends_on_task_id || null;
+    delete taskData.depends_on_task_id;
 
     // Create task
     const task = await Task.create({
       ...taskData,
-      assigned_to_user_id: taskData.assigned_to
+      assigned_to_user_id: taskData.assigned_to,
+      show_collaborators: taskData.show_collaborators !== false
     });
 
-    // Log activity
+    // Create TaskAssignment entries (primary + extras)
+    const allAssigneeIds = [assignee.id, ...extraAssigneeIds];
+    const uniqueIds = [...new Set(allAssigneeIds)];
+    await TaskAssignment.bulkCreate(
+      uniqueIds.map(uid => ({ task_id: task.id, user_id: uid })),
+      { ignoreDuplicates: true }
+    );
+
+    // Create dependency if specified
+    if (dependsOnId) {
+      const depTask = await Task.findByPk(dependsOnId);
+      if (depTask) {
+        await TaskDependency.create({ task_id: task.id, depends_on_task_id: dependsOnId });
+      }
+    }
+
+    // Activity log
+    const assigneeNames = assignee.name +
+      (extraAssigneeIds.length > 0 ? ` + ${extraAssigneeIds.length} others` : '');
     await TaskActivity.create({
       task_id: task.id,
       user_id: user.id,
       action: 'created',
-      details: `Task created and assigned to ${assignee.name}`
+      details: `Task created and assigned to ${assigneeNames}`
     });
 
-    // Load associations
-    await task.reload({
-      include: [
-        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
-        { model: User, as: 'assignee', attributes: ['id', 'name', 'email'] },
-        { model: Department, as: 'department', attributes: ['id', 'name'] },
-        { model: Location, as: 'location', attributes: ['id', 'name'] }
-      ]
-    });
+    await task.reload({ include: TASK_INCLUDES });
 
-    // Send assignment email (non-blocking)
-    Mailer.sendTaskAssignment(
-      assignee.email,
-      assignee.name,
-      task,
-      user.name || 'Administrator'
-    ).catch(err => logger.error('Assignment email failed:', err));
+    // Send emails to all assignees (non-blocking)
+    for (const uid of uniqueIds) {
+      const u = await User.findByPk(uid, { attributes: ['id', 'name', 'email'] });
+      if (u) {
+        Mailer.sendTaskAssignment(u.email, u.name, task, user.name || 'Administrator')
+          .catch(err => logger.error('Assignment email failed:', err));
+      }
+    }
 
     return task;
   }
@@ -215,15 +324,7 @@ class TaskService {
       });
     }
 
-    // Reload with associations
-    await task.reload({
-      include: [
-        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
-        { model: User, as: 'assignee', attributes: ['id', 'name', 'email'] },
-        { model: Department, as: 'department', attributes: ['id', 'name'] },
-        { model: Location, as: 'location', attributes: ['id', 'name'] }
-      ]
-    });
+    await task.reload({ include: TASK_INCLUDES });
 
     // Send completion email to creator when task marked for review
     if (

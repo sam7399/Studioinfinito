@@ -39,6 +39,8 @@ db.User = require('./user')(sequelize, Sequelize.DataTypes);
 db.Task = require('./task')(sequelize, Sequelize.DataTypes);
 db.TaskReview = require('./taskReview')(sequelize, Sequelize.DataTypes);
 db.TaskActivity = require('./taskActivity')(sequelize, Sequelize.DataTypes);
+db.TaskAssignment = require('./taskAssignment')(sequelize, Sequelize.DataTypes);
+db.TaskDependency = require('./taskDependency')(sequelize, Sequelize.DataTypes);
 db.PasswordResetToken = require('./passwordResetToken')(sequelize, Sequelize.DataTypes);
 
 // Define associations

@@ -1,4 +1,5 @@
 const reviewReminderJob = require('./reviewReminders');
+const escalationJob = require('./escalation');
 const logger = require('../utils/logger');
 
 /**
@@ -7,11 +8,11 @@ const logger = require('../utils/logger');
 const startCronJobs = () => {
   logger.info('Starting cron jobs...');
 
-  // Start review reminder job (runs hourly)
   reviewReminderJob.start();
-  logger.info('Review reminder job started (runs hourly)');
+  logger.info('Review reminder job started (runs hourly at :00)');
 
-  // Add more cron jobs here as needed
+  escalationJob.start();
+  logger.info('Auto-escalation job started (runs hourly at :30)');
 };
 
 /**
@@ -19,11 +20,8 @@ const startCronJobs = () => {
  */
 const stopCronJobs = () => {
   logger.info('Stopping cron jobs...');
-  
   reviewReminderJob.stop();
-  logger.info('Review reminder job stopped');
-
-  // Stop other cron jobs here
+  escalationJob.stop();
 };
 
 module.exports = {
