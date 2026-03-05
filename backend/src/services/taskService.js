@@ -423,7 +423,7 @@ class TaskService {
     const activities = await TaskActivity.findAll({
       where: { task_id: taskId },
       include: [
-        { model: User, as: 'user', attributes: ['id', 'name', 'email'] }
+        { model: User, as: 'actor', attributes: ['id', 'name', 'email'] }
       ],
       order: [['created_at', 'DESC']]
     });
