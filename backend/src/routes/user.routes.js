@@ -45,7 +45,7 @@ router.get(
   celebrate({
     [Segments.QUERY]: Joi.object({
       page: Joi.number().integer().min(1).default(1),
-      limit: Joi.number().integer().min(1).max(100).default(20),
+      limit: Joi.number().integer().min(1).max(500).default(20),
       role: Joi.string().valid('superadmin', 'management', 'employee'),
       department_id: Joi.number().integer(),
       location_id: Joi.number().integer(),
