@@ -2,6 +2,7 @@ const { Task, User, Department, Location, Company, TaskActivity, TaskReview } = 
 const { Op } = require('sequelize');
 const RBACService = require('./rbacService');
 const logger = require('../utils/logger');
+const Mailer = require('../mail/mailer');
 
 class TaskService {
   /**
@@ -108,9 +109,8 @@ class TaskService {
    * Create new task
    */
   static async createTask(taskData, user) {
-    // Set creator and company
+    // Set creator
     taskData.created_by_user_id = user.id;
-    taskData.company_id = user.company_id;
 
     // Validate assigned user exists and is in same company
     const assignee = await User.findByPk(taskData.assigned_to);
@@ -120,6 +120,12 @@ class TaskService {
 
     if (user.role !== 'superadmin' && assignee.company_id !== user.company_id) {
       throw new Error('Cannot assign task to user from different company');
+    }
+
+    // Use creator's company_id; fall back to assignee's for superadmin with no company
+    taskData.company_id = user.company_id || assignee.company_id;
+    if (!taskData.company_id) {
+      throw new Error('Cannot determine company for task');
     }
 
     // Create task
@@ -145,6 +151,14 @@ class TaskService {
         { model: Location, as: 'location', attributes: ['id', 'name'] }
       ]
     });
+
+    // Send assignment email (non-blocking)
+    Mailer.sendTaskAssignment(
+      assignee.email,
+      assignee.name,
+      task,
+      user.name || 'Administrator'
+    ).catch(err => logger.error('Assignment email failed:', err));
 
     return task;
   }
@@ -188,6 +202,7 @@ class TaskService {
       changes.push(`Priority changed from ${task.priority} to ${updates.priority}`);
     }
 
+    const previousStatus = task.status;
     await task.update(updates);
 
     // Log activity
@@ -209,6 +224,20 @@ class TaskService {
         { model: Location, as: 'location', attributes: ['id', 'name'] }
       ]
     });
+
+    // Send completion email to creator when task marked for review
+    if (
+      updates.status === 'complete_pending_review' &&
+      previousStatus !== 'complete_pending_review' &&
+      task.creator
+    ) {
+      Mailer.sendTaskCompletion(
+        task.creator.email,
+        task.creator.name,
+        task,
+        task.assignee?.name || user.name || 'Assignee'
+      ).catch(err => logger.error('Completion email failed:', err));
+    }
 
     return task;
   }
@@ -304,6 +333,19 @@ class TaskService {
       action: 'reviewed',
       details: `Task reviewed with rating ${reviewData.rating}/5`
     });
+
+    // Send review result email to assignee
+    const assignee = await User.findByPk(task.assigned_to_user_id, { attributes: ['id', 'name', 'email'] });
+    if (assignee) {
+      Mailer.sendTaskReview(
+        assignee.email,
+        assignee.name,
+        task,
+        user.name || 'Reviewer',
+        'approved',
+        reviewData.comments
+      ).catch(err => logger.error('Review email failed:', err));
+    }
 
     return review;
   }
