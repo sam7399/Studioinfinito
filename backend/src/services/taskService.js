@@ -285,9 +285,9 @@ class TaskService {
       (extraAssigneeIds.length > 0 ? ` + ${extraAssigneeIds.length} others` : '');
     await TaskActivity.create({
       task_id: task.id,
-      user_id: user.id,
+      actor_user_id: user.id,
       action: 'created',
-      details: `Task created and assigned to ${assigneeNames}`
+      note: `Task created and assigned to ${assigneeNames}`
     });
 
     // Reload with full includes; fall back to basic reload if new tables don't exist yet
@@ -356,9 +356,9 @@ class TaskService {
     if (changes.length > 0) {
       await TaskActivity.create({
         task_id: task.id,
-        user_id: user.id,
+        actor_user_id: user.id,
         action: 'updated',
-        details: changes.join(', ')
+        note: changes.join(', ')
       });
     }
 
@@ -468,9 +468,9 @@ class TaskService {
     // Log activity
     await TaskActivity.create({
       task_id: taskId,
-      user_id: user.id,
-      action: 'reviewed',
-      details: `Task reviewed with rating ${reviewData.rating}/5`
+      actor_user_id: user.id,
+      action: 'approved',
+      note: `Task reviewed with rating ${reviewData.rating}/5`
     });
 
     // Send review result email to assignee
@@ -526,9 +526,9 @@ class TaskService {
           await task.update({ assigned_to_user_id: user.id });
           await TaskActivity.create({
             task_id: task.id,
-            user_id: requestingUser.id,
-            action: 'reassigned',
-            details: `Bulk reassigned to ${user.name}`
+            actor_user_id: requestingUser.id,
+            action: 'assigned',
+            note: `Bulk reassigned to ${user.name}`
           });
           results.push({ task_id: task.id, user_id: user.id, action: 'reassigned' });
         } else {
@@ -549,9 +549,9 @@ class TaskService {
           });
           await TaskActivity.create({
             task_id: newTask.id,
-            user_id: requestingUser.id,
+            actor_user_id: requestingUser.id,
             action: 'created',
-            details: `Created via bulk assign from task #${task.id} for ${user.name}`
+            note: `Created via bulk assign from task #${task.id} for ${user.name}`
           });
           results.push({ task_id: newTask.id, user_id: user.id, action: 'created' });
         }
