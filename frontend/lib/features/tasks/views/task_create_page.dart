@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/networking/dio_client.dart';
 import '../providers/task_provider.dart';
 import '../../org/providers/org_provider.dart';
+import 'attachment_section.dart';
 
 // userId → active task count for workload dot
 final _workloadSingleProvider = FutureProvider.autoDispose<Map<int, int>>((ref) async {
@@ -60,6 +62,7 @@ class _TaskCreatePageState extends ConsumerState<TaskCreatePage> {
   bool _showCollaborators = true;
   bool _loading = false;
   String? _error;
+  final List<PendingAttachment> _attachments = [];
 
   @override
   void dispose() {
@@ -96,14 +99,17 @@ class _TaskCreatePageState extends ConsumerState<TaskCreatePage> {
       'show_collaborators': _showCollaborators,
     };
 
-    final ok = await ref.read(taskProvider.notifier).createTask(data);
-    if (mounted) {
-      if (ok) {
-        context.go('/tasks');
-      } else {
+    try {
+      final taskId = await ref.read(taskProvider.notifier).createTask(data);
+      if (_attachments.isNotEmpty) {
+        await uploadPendingAttachments(ref, taskId, _attachments);
+      }
+      if (mounted) context.go('/tasks');
+    } catch (e) {
+      if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Failed to create task. Please check all fields.';
+          _error = e.toString().replaceFirst('Exception: ', '');
         });
       }
     }
@@ -304,6 +310,27 @@ class _TaskCreatePageState extends ConsumerState<TaskCreatePage> {
                           alignment: Alignment.centerLeft,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 14)),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Attachments
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: PendingAttachmentSection(
+                        attachments: _attachments,
+                        onAdd: () async {
+                          final result = await FilePicker.platform.pickFiles(withData: true, allowMultiple: true);
+                          if (result != null) {
+                            setState(() => _attachments.addAll(result.files.map((f) => PendingAttachment(f))));
+                          }
+                        },
+                        onRemove: (i) => setState(() => _attachments.removeAt(i)),
+                      ),
                     ),
                     const SizedBox(height: 16),
 

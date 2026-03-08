@@ -1,4 +1,4 @@
-const { Task, User, Department, Location, Company, TaskActivity, TaskReview, TaskAssignment, TaskDependency } = require('../models');
+const { Task, User, Department, Location, Company, TaskActivity, TaskReview, TaskAssignment, TaskDependency, TaskAttachment } = require('../models');
 const { Op } = require('sequelize');
 const RBACService = require('./rbacService');
 const logger = require('../utils/logger');
@@ -220,6 +220,18 @@ class TaskService {
    * Create new task
    */
   static async createTask(taskData, user) {
+    logger.info('[createTask] incoming data:', JSON.stringify({
+      title: taskData.title,
+      assigned_to: taskData.assigned_to,
+      department_id: taskData.department_id,
+      location_id: taskData.location_id,
+      due_date: taskData.due_date,
+      priority: taskData.priority,
+      caller_id: user?.id,
+      caller_role: user?.role,
+      caller_company_id: user?.company_id
+    }));
+
     taskData.created_by_user_id = user.id;
 
     // Support both single (assigned_to) and multi (assigned_to_ids) assignees
@@ -228,30 +240,70 @@ class TaskService {
       : [];
     delete taskData.assigned_to_ids;
 
+    // Remove fields that are not model columns
+    delete taskData.tags;
+
     // Validate primary assignee
     const assignee = await User.findByPk(taskData.assigned_to);
     if (!assignee) throw new Error('Assigned user not found');
+
+    logger.info(`[createTask] assignee found: id=${assignee.id} company_id=${assignee.company_id}`);
 
     if (user.role !== 'superadmin' && assignee.company_id !== user.company_id) {
       throw new Error('Cannot assign task to user from different company');
     }
 
-    taskData.company_id = user.company_id || assignee.company_id;
-    if (!taskData.company_id) throw new Error('Cannot determine company for task');
+    // Resolve company_id: prefer assignee's company (most reliable for superadmin)
+    let companyId = assignee.company_id || user.company_id;
+
+    // Last resort: look up from the department
+    if (!companyId && taskData.department_id) {
+      const dept = await Department.findByPk(taskData.department_id, { attributes: ['id', 'company_id'] });
+      if (dept) companyId = dept.company_id;
+    }
+
+    // Last resort: look up from the location
+    if (!companyId && taskData.location_id) {
+      const loc = await Location.findByPk(taskData.location_id, { attributes: ['id', 'company_id'] });
+      if (loc) companyId = loc.company_id;
+    }
+
+    // Fallback: if only one company exists, use it
+    if (!companyId) {
+      const companies = await Company.findAll({ attributes: ['id'], limit: 1 });
+      if (companies.length === 1) companyId = companies[0].id;
+    }
+
+    if (!companyId) {
+      logger.error('[createTask] Cannot determine company_id', { user_id: user.id, assignee_id: assignee.id });
+      throw new Error('Cannot determine company for task. Please ensure users are assigned to a company.');
+    }
+
+    taskData.company_id = companyId;
+
+    logger.info(`[createTask] resolved company_id=${companyId}`);
 
     // Handle depends_on
     const dependsOnId = taskData.depends_on_task_id || null;
     delete taskData.depends_on_task_id;
 
-    // Build create payload — omit show_collaborators if it might not exist yet
+    // Build create payload — only include known model fields to avoid Sequelize warnings
     const createPayload = {
-      ...taskData,
-      assigned_to_user_id: taskData.assigned_to
+      title: taskData.title,
+      description: taskData.description || null,
+      priority: taskData.priority || 'normal',
+      status: taskData.status || 'open',
+      assigned_to_user_id: taskData.assigned_to,
+      created_by_user_id: taskData.created_by_user_id,
+      company_id: taskData.company_id,
+      department_id: taskData.department_id,
+      location_id: taskData.location_id,
+      due_date: taskData.due_date || null,
+      estimated_hours: taskData.estimated_hours || null,
+      show_collaborators: taskData.show_collaborators !== false
     };
-    // Only set show_collaborators if it's defined (migration may not have run yet)
-    if (taskData.show_collaborators !== undefined) {
-      createPayload.show_collaborators = taskData.show_collaborators !== false;
-    }
+
+    logger.info('[createTask] createPayload built, calling Task.create...');
 
     // Create task
     const task = await Task.create(createPayload);
@@ -583,7 +635,13 @@ class TaskService {
           } else if (user.department_id) {
             taskData.department_id = user.department_id;
           } else {
-            throw new Error('Cannot determine department for task');
+            // Try to determine from location
+            if (taskData.location_id) {
+              const loc = await Location.findByPk(taskData.location_id, { attributes: ['id', 'company_id'] });
+              if (!loc) throw new Error('Cannot determine department for task');
+            } else {
+              throw new Error('Cannot determine department for task');
+            }
           }
         }
         const task = await TaskService.createTask(taskData, user);

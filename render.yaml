@@ -1,58 +1,53 @@
-# Exported from Render on 2026-03-07T12:34:46Z
 version: "1"
 projects:
-- name: My project
+- name: TSI Task Manager
   environments:
-  - name: Gem-Aromatics-Task-management
+  - name: tsi-task-manager
     services:
     - type: web
-      name: Gem-Aromatics-Task-management-1
+      name: tsi-task-manager
       runtime: node
-      repo: https://github.com/sam7399/Gem-Aromatics-Task-management
       plan: starter
       envVars:
-      - key: EMAILPASS
-        sync: false
-      - key: CORS_ORIGINS
-        sync: false
-      - key: BASE_URL_APP
-        sync: false
-      - key: DBPASS
-        sync: false
-      - key: DBUSER
-        sync: false
-      - key: DBNAME
-        sync: false
-      - key: DBPORT
-        sync: false
-      - key: DBHOST
-        sync: false
-      - key: LOG_LEVEL
-        sync: false
-      - key: BASE_URL_API
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
-      - key: EMAILUSER
-        sync: false
-      - key: EMAILSECURE
-        sync: false
-      - key: EMAILPORT
-        sync: false
-      - key: EMAILHOST
-        sync: false
-      - key: JWT_EXPIRES_IN
+      - key: NODE_ENV
+        value: production
+      - key: PORT
         sync: false
       - key: JWT_SECRET
         sync: false
-      - key: PORT
+      - key: JWT_EXPIRES_IN
+        value: 12h
+      - key: DBHOST
         sync: false
-      - key: NODE_ENV
+      - key: DBPORT
         sync: false
+      - key: DBNAME
+        sync: false
+      - key: DBUSER
+        sync: false
+      - key: DBPASS
+        sync: false
+      - key: EMAILHOST
+        sync: false
+      - key: EMAILPORT
+        sync: false
+      - key: EMAILSECURE
+        sync: false
+      - key: EMAILUSER
+        sync: false
+      - key: EMAILPASS
+        sync: false
+      - key: EMAIL_FROM
+        value: TSI Task Manager <no-reply@thestudioinfinito.com>
+      - key: BASE_URL_API
+        sync: false
+      - key: BASE_URL_APP
+        value: https://task.thestudioinfinito.com
+      - key: CORS_ORIGINS
+        value: https://task.thestudioinfinito.com
+      - key: LOG_LEVEL
+        value: info
       region: oregon
       buildCommand: npm install
       startCommand: node src/server.js
-      domains:
-      - api.gemaromatics.com
-      autoDeployTrigger: commit
       rootDir: backend

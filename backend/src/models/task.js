@@ -221,6 +221,13 @@ module.exports = (sequelize, DataTypes) => {
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE'
     });
+
+    Task.hasMany(models.TaskAttachment, {
+      foreignKey: 'task_id',
+      as: 'attachments',
+      onUpdate: 'CASCADE',
+      onDelete: 'CASCADE'
+    });
   };
 
   return Task;

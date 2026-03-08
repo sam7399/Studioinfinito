@@ -7,8 +7,9 @@ final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
       baseUrl: ApiConstants.baseUrl,
-      connectTimeout: const Duration(seconds: 90),
-      receiveTimeout: const Duration(seconds: 90),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -28,6 +29,9 @@ final dioProvider = Provider<Dio>((ref) {
         handler.next(options);
       },
       onError: (error, handler) {
+        if (error.response?.statusCode == 401) {
+          TokenService.instance.onUnauthorized?.call();
+        }
         handler.next(error);
       },
     ),

@@ -1,5 +1,5 @@
-name: task_manager
-description: Multi-Company Task Management System
+name: tsi_task_manager
+description: The Studio Infinito — Task Manager
 publish_to: 'none'
 version: 1.0.0+1
 

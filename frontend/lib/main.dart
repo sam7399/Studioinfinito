@@ -25,7 +25,7 @@ class TaskManagerApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     
     return MaterialApp.router(
-      title: dotenv.env['APP_NAME'] ?? 'Task Manager',
+      title: dotenv.env['APP_NAME'] ?? 'TSI Task Manager',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,

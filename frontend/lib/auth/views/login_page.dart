@@ -70,7 +70,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Task Manager',
+                'TSI Task Manager',
                 style: TextStyle(
                   color: GemColors.green,
                   fontSize: 22,
@@ -170,7 +170,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           const SizedBox(height: 4),
           Center(
             child: Text(
-              'Sign in to Task Manager',
+              'Sign in to TSI Task Manager',
               style: TextStyle(
                   fontSize: 13, color: Colors.grey.shade500),
             ),

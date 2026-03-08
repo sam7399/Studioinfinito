@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/task_model.dart';
@@ -89,13 +90,34 @@ class TaskNotifier extends Notifier<TaskListState> {
     }
   }
 
-  Future<bool> createTask(Map<String, dynamic> data) async {
+  /// Returns the created task ID on success, throws Exception with message on failure.
+  Future<int> createTask(Map<String, dynamic> data) async {
     try {
-      await _dio.post(ApiConstants.tasks, data: data);
+      final response = await _dio.post(ApiConstants.tasks, data: data);
+      final taskId = response.data['data']['id'] as int;
       await fetchTasks(reset: true);
-      return true;
-    } on DioException {
-      return false;
+      return taskId;
+    } on DioException catch (e) {
+      String msg;
+      if (e.response?.data != null) {
+        // Server returned a response — use its message
+        msg = e.response!.data['message'] as String? ?? 'Server error (${e.response!.statusCode})';
+        // If validation errors array is present, append first detail
+        final errors = e.response!.data['errors'];
+        if (errors is List && errors.isNotEmpty) {
+          final detail = (errors.first as Map?)?.values.first?.toString() ?? '';
+          if (detail.isNotEmpty) msg = '$msg: $detail';
+        }
+      } else if (e.type == DioExceptionType.connectionTimeout ||
+                 e.type == DioExceptionType.sendTimeout ||
+                 e.type == DioExceptionType.receiveTimeout) {
+        msg = 'Request timed out. Check your connection and try again.';
+      } else if (e.type == DioExceptionType.connectionError) {
+        msg = 'Cannot reach server. Check your internet connection.';
+      } else {
+        msg = 'Network error: ${e.message ?? e.type.name}';
+      }
+      throw Exception(msg);
     }
   }
 
@@ -138,6 +160,36 @@ class TaskNotifier extends Notifier<TaskListState> {
       return data.map((j) => TaskActivity.fromJson(j)).toList();
     } on DioException {
       return [];
+    }
+  }
+
+  Future<bool> uploadAttachment(int taskId, Uint8List bytes, String filename, String mimeType) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: filename, contentType: DioMediaType.parse(mimeType)),
+      });
+      await _dio.post(ApiConstants.taskAttachments(taskId), data: formData);
+      return true;
+    } on DioException {
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAttachments(int taskId) async {
+    try {
+      final response = await _dio.get(ApiConstants.taskAttachments(taskId));
+      return List<Map<String, dynamic>>.from(response.data['data'] ?? []);
+    } on DioException {
+      return [];
+    }
+  }
+
+  Future<bool> deleteAttachment(int taskId, int attachmentId) async {
+    try {
+      await _dio.delete(ApiConstants.taskAttachmentDelete(taskId, attachmentId));
+      return true;
+    } on DioException {
+      return false;
     }
   }
 }

@@ -28,18 +28,25 @@ const config = {
       user: process.env.EMAILUSER,
       pass: process.env.EMAILPASS
     },
-    from: process.env.EMAIL_FROM || 'Task Manager <no-reply@gemaromatics.com>'
+    from: process.env.EMAIL_FROM || 'TSI Task Manager <no-reply@thestudioinfinito.com>'
   },
 
   urls: {
-    api: process.env.BASE_URL_API || 'https://api.gemaromatics.com',
-    app: process.env.BASE_URL_APP || 'https://app.gemaromatics.com'
+    api: process.env.BASE_URL_API || 'https://tsi-task-manager.onrender.com',
+    app: process.env.BASE_URL_APP || 'https://task.thestudioinfinito.com'
   },
 
   cors: {
-    origins: process.env.CORS_ORIGINS 
-      ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
-      : ['https://app.gemaromatics.com']
+    origins: (() => {
+      // Always include the known production frontends regardless of env config
+      const hardcoded = [
+        'https://task.thestudioinfinito.com'
+      ];
+      const fromEnv = process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+        : [];
+      return [...new Set([...hardcoded, ...fromEnv])];
+    })()
   },
 
   logging: {

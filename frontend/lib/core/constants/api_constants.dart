@@ -39,6 +39,13 @@ class ApiConstants {
   static const String locations = '/org/locations';
   static String locationById(int id) => '/org/locations/$id';
 
+  // Attachments
+  static String taskAttachments(int id) => '/tasks/$id/attachments';
+  static String taskAttachmentDownload(int taskId, int attachmentId) =>
+      '/tasks/$taskId/attachments/$attachmentId/download';
+  static String taskAttachmentDelete(int taskId, int attachmentId) =>
+      '/tasks/$taskId/attachments/$attachmentId';
+
   // Bulk assign / bulk create
   static const String tasksBulkAssign = '/tasks/bulk-assign';
   static const String tasksBulkCreate = '/tasks/bulk-create';

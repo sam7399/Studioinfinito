@@ -92,7 +92,7 @@ class _SideNav extends ConsumerWidget {
                                 .withOpacity(0.35)),
                       ),
                       child: const Text(
-                        'Task Manager',
+                        'TSI Task Manager',
                         style: TextStyle(
                           color: GemColors.green,
                           fontSize: 11,
@@ -227,7 +227,7 @@ class _SideNav extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
               child: Text(
-                user?.companyName ?? 'GEM Aromatics',
+                user?.companyName ?? 'The Studio Infinito',
                 style: TextStyle(
                     fontSize: 10,
                     color: Colors.white.withOpacity(0.3),

@@ -6,6 +6,7 @@ class TokenService {
   static final TokenService instance = TokenService._();
 
   String? _token;
+  void Function()? onUnauthorized;
 
   String? get token => _token;
 

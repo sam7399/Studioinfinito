@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#1a1a2e"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#e94560" stroke-width="3"/>
+
+  <!-- Infinity symbol -->
+  <path d="M55 100
+    C55 80 70 65 88 65
+    C106 65 115 80 100 100
+    C85 120 94 135 112 135
+    C130 135 145 120 145 100
+    C145 80 130 65 112 65
+    C94 65 85 80 100 100
+    C115 120 106 135 88 135
+    C70 135 55 120 55 100Z"
+    fill="none" stroke="#e94560" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- SI monogram below -->
+  <text x="100" y="165"
+    font-family="Georgia, serif"
+    font-size="18"
+    font-weight="bold"
+    fill="#ffffff"
+    text-anchor="middle"
+    letter-spacing="6">TSI</text>
+</svg>

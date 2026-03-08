@@ -1,4 +1,7 @@
+const path = require('path');
+const fs = require('fs');
 const TaskService = require('../services/taskService');
+const { TaskAttachment, User } = require('../models');
 const logger = require('../utils/logger');
 
 class TaskController {
@@ -38,16 +41,26 @@ class TaskController {
 
   static async createTask(req, res, next) {
     try {
+      logger.info('Create task request from user:', req.user?.id, 'body keys:', Object.keys(req.body || {}));
       const task = await TaskService.createTask(req.body, req.user);
-      
+
       logger.info(`Task created: ${task.id} by user ${req.user.id}`);
-      
+
       res.status(201).json({
         success: true,
         data: task
       });
     } catch (error) {
-      logger.error('Create task error:', error);
+      logger.error('Create task error:', error.message, error.stack);
+      // Return the actual error message so the frontend can display it
+      const knownErrors = [
+        'Assigned user not found',
+        'Cannot assign task to user from different company',
+        'Cannot determine company for task'
+      ];
+      if (knownErrors.some(msg => error.message.includes(msg))) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
       next(error);
     }
   }
@@ -265,6 +278,89 @@ class TaskController {
       res.status(201).json({ success: true, data: result });
     } catch (error) {
       logger.error('Bulk create error:', error);
+      next(error);
+    }
+  }
+
+  static async uploadAttachment(req, res, next) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+      const taskId = parseInt(req.params.id, 10);
+      const task = await TaskService.getTaskById(taskId, req.user);
+      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+      const attachment = await TaskAttachment.create({
+        task_id: taskId,
+        uploaded_by_user_id: req.user.id,
+        original_name: req.file.originalname,
+        stored_name: req.file.filename,
+        mime_type: req.file.mimetype,
+        file_size: req.file.size
+      });
+
+      const result = attachment.toJSON();
+      result.uploader = { id: req.user.id, name: req.user.name };
+      res.status(201).json({ success: true, data: result });
+    } catch (error) {
+      if (req.file) {
+        fs.unlink(req.file.path, () => {});
+      }
+      logger.error('Upload attachment error:', error);
+      next(error);
+    }
+  }
+
+  static async getAttachments(req, res, next) {
+    try {
+      const taskId = parseInt(req.params.id, 10);
+      const attachments = await TaskAttachment.findAll({
+        where: { task_id: taskId },
+        include: [{ model: User, as: 'uploader', attributes: ['id', 'name'] }],
+        order: [['created_at', 'DESC']]
+      });
+      res.json({ success: true, data: attachments });
+    } catch (error) {
+      logger.error('Get attachments error:', error);
+      next(error);
+    }
+  }
+
+  static async downloadAttachment(req, res, next) {
+    try {
+      const attachment = await TaskAttachment.findOne({
+        where: { id: req.params.attachmentId, task_id: req.params.id }
+      });
+      if (!attachment) return res.status(404).json({ success: false, message: 'Attachment not found' });
+
+      const filePath = path.join(__dirname, '../../uploads/tasks', attachment.stored_name);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, message: 'File not found on server' });
+      }
+      res.setHeader('Content-Disposition', `attachment; filename="${attachment.original_name}"`);
+      res.setHeader('Content-Type', attachment.mime_type || 'application/octet-stream');
+      res.sendFile(filePath);
+    } catch (error) {
+      logger.error('Download attachment error:', error);
+      next(error);
+    }
+  }
+
+  static async deleteAttachment(req, res, next) {
+    try {
+      const attachment = await TaskAttachment.findOne({
+        where: { id: req.params.attachmentId, task_id: req.params.id }
+      });
+      if (!attachment) return res.status(404).json({ success: false, message: 'Attachment not found' });
+
+      const filePath = path.join(__dirname, '../../uploads/tasks', attachment.stored_name);
+      if (fs.existsSync(filePath)) fs.unlink(filePath, () => {});
+
+      await attachment.destroy();
+      res.json({ success: true, message: 'Attachment deleted' });
+    } catch (error) {
+      logger.error('Delete attachment error:', error);
       next(error);
     }
   }

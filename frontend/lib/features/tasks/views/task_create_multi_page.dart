@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/networking/dio_client.dart';
 import '../../org/providers/org_provider.dart';
+import 'attachment_section.dart';
 
 // ── Workload provider ─────────────────────────────────────────────────────────
 // userId → (open + in_progress) count
@@ -42,6 +44,7 @@ class _RowData {
   final TextEditingController descCtrl = TextEditingController();
   final DateTime assignDate = DateTime.now();
   DateTime? dueDate;
+  List<PendingAttachment> attachments = [];
 
   /// When true, all tasks spawned from this row are tagged with a shared
   /// group ID so they are traceable as "linked" in the task list.
@@ -162,8 +165,13 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
 
   Future<void> _saveAll() async {
     final payload = <Map<String, dynamic>>[];
+    // Track which row index each payload entry came from (for attachment upload)
+    final payloadRowMap = <int>[];
 
-    for (final row in _rows.where((r) => r.isValid)) {
+    for (int rowIdx = 0; rowIdx < _rows.length; rowIdx++) {
+      final row = _rows[rowIdx];
+      if (!row.isValid) continue;
+
       // Generate a unique group tag if linking is enabled for 2+ users.
       final groupTag = (row.linkTasks && row.assignedUserIds.length > 1)
           ? 'linked:${DateTime.now().millisecondsSinceEpoch}'
@@ -179,6 +187,7 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
           'due_date': row.dueDate!.toIso8601String(),
           if (groupTag != null) 'tags': [groupTag],
         });
+        payloadRowMap.add(rowIdx);
       }
     }
 
@@ -205,6 +214,17 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
       final failed =
           (res.data['data']['failed_count'] as num?)?.toInt() ?? 0;
 
+      // Upload attachments for each created task
+      final createdTasks = List<Map<String, dynamic>>.from(res.data['data']['tasks'] ?? []);
+      for (int i = 0; i < createdTasks.length && i < payloadRowMap.length; i++) {
+        final rowIdx = payloadRowMap[i];
+        final row = _rows[rowIdx];
+        if (row.attachments.isEmpty) continue;
+        final taskId = createdTasks[i]['id'] as int?;
+        if (taskId == null) continue;
+        await uploadPendingAttachments(ref, taskId, row.attachments);
+      }
+
       for (final r in _rows) {
         r.dispose();
       }
@@ -218,11 +238,12 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
         _success = '$created task(s) created successfully!'
             '${failed > 0 ? '  ($failed failed)' : ''}';
       });
-    } catch (_) {
+    } catch (e) {
       setState(() {
         _saving = false;
-        _error =
-            'Failed to create tasks. Please check your inputs and try again.';
+        _error = e.toString().contains('DioException')
+            ? 'Failed to create tasks. Please check your inputs and try again.'
+            : e.toString().replaceFirst('Exception: ', '');
       });
     }
   }
@@ -1095,6 +1116,28 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
                     borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 12),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Attachments ─────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: PendingAttachmentSection(
+                attachments: row.attachments,
+                onAdd: () async {
+                  final result = await FilePicker.platform.pickFiles(withData: true, allowMultiple: true);
+                  if (result != null) {
+                    setState(() => row.attachments.addAll(result.files.map((f) => PendingAttachment(f))));
+                  }
+                },
+                onRemove: (idx) => setState(() => row.attachments.removeAt(idx)),
               ),
             ),
           ],

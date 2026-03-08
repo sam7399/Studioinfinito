@@ -2,6 +2,7 @@ const express = require('express');
 const { celebrate, Joi, Segments } = require('celebrate');
 const taskController = require('../controllers/taskController');
 const { authenticate, requireRole } = require('../middleware/auth');
+const upload = require('../config/multer');
 
 const router = express.Router();
 
@@ -188,5 +189,11 @@ router.post(
   }),
   taskController.bulkCreate
 );
+
+// Attachment routes
+router.post('/:id/attachments', upload.single('file'), taskController.uploadAttachment);
+router.get('/:id/attachments', taskController.getAttachments);
+router.get('/:id/attachments/:attachmentId/download', taskController.downloadAttachment);
+router.delete('/:id/attachments/:attachmentId', taskController.deleteAttachment);
 
 module.exports = router;

@@ -41,6 +41,7 @@ class AuthState {
 class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() {
+    TokenService.instance.onUnauthorized = () => logout();
     _restoreSession();
     return const AuthState();
   }

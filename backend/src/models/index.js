@@ -42,6 +42,7 @@ db.TaskActivity = require('./taskActivity')(sequelize, Sequelize.DataTypes);
 db.TaskAssignment = require('./taskAssignment')(sequelize, Sequelize.DataTypes);
 db.TaskDependency = require('./taskDependency')(sequelize, Sequelize.DataTypes);
 db.PasswordResetToken = require('./passwordResetToken')(sequelize, Sequelize.DataTypes);
+db.TaskAttachment = require('./taskAttachment')(sequelize, Sequelize.DataTypes);
 
 // Define associations
 Object.keys(db).forEach(modelName => {

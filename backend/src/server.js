@@ -60,6 +60,26 @@ async function ensureSchema() {
       logger.info('[schema] Created table task_dependencies');
     }
 
+    if (!tables.includes('task_attachments')) {
+      await sequelize.query(`
+        CREATE TABLE task_attachments (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          task_id INT NOT NULL,
+          uploaded_by_user_id INT NOT NULL,
+          original_name VARCHAR(255) NOT NULL,
+          stored_name VARCHAR(255) NOT NULL,
+          mime_type VARCHAR(100) NULL,
+          file_size INT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_attach_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT fk_attach_user FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+          KEY ta_attach_task_id_idx (task_id)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      logger.info('[schema] Created table task_attachments');
+    }
+
     logger.info('[schema] Schema check complete');
   } catch (err) {
     logger.error('[schema] Schema ensure error:', err.message);

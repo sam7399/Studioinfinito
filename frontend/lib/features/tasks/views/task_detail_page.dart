@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import '../providers/task_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
+import 'attachment_section.dart';
 
 class TaskDetailPage extends ConsumerStatefulWidget {
   final int taskId;
@@ -331,6 +332,15 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                     ),
                   ],
                 ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Attachments ───────────────────────────────────────────
+            _Card(
+              child: TaskAttachmentSection(
+                taskId: widget.taskId,
+                canUpload: true,
               ),
             ),
             const SizedBox(height: 16),
