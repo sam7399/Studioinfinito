@@ -32,7 +32,7 @@ const config = {
   },
 
   urls: {
-    api: process.env.BASE_URL_API || 'https://tsi-task-manager.onrender.com',
+    api: process.env.BASE_URL_API || 'https://studioinfinito-api.onrender.com',
     app: process.env.BASE_URL_APP || 'https://task.thestudioinfinito.com'
   },
 
