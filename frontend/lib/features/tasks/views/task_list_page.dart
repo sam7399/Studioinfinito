@@ -214,17 +214,25 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOverdue = task.isOverdue;
+    final restricted = task.isRestricted;
+
+    Border? cardBorder;
+    if (restricted) {
+      cardBorder = Border.all(color: Colors.blueGrey.shade100);
+    } else if (isOverdue) {
+      cardBorder = Border.all(color: Colors.red.shade200);
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: restricted ? const Color(0xFFF8FAFC) : Colors.white,
         borderRadius: BorderRadius.circular(10),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2))],
-        border: isOverdue ? Border.all(color: Colors.red.shade200) : null,
+        border: cardBorder,
       ),
       child: InkWell(
-        onTap: () => context.go('/tasks/${task.id}'),
+        onTap: restricted ? null : () => context.go('/tasks/${task.id}'),
         borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -233,7 +241,10 @@ class _TaskCard extends StatelessWidget {
               Container(
                 width: 4,
                 height: 48,
-                decoration: BoxDecoration(color: _priorityColor(task.priority), borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(
+                  color: restricted ? Colors.blueGrey.shade200 : _priorityColor(task.priority),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -242,10 +253,22 @@ class _TaskCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
+                        if (restricted) ...[
+                          Icon(Icons.lock_outline, size: 13, color: Colors.blueGrey.shade400),
+                          const SizedBox(width: 4),
+                        ],
                         Expanded(
-                          child: Text(task.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14), overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            task.title,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: restricted ? Colors.blueGrey.shade600 : null,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        if (isOverdue) ...[
+                        if (isOverdue && !restricted) ...[
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -256,46 +279,60 @@ class _TaskCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        _Badge(label: task.status.replaceAll('_', ' '), color: _statusColor(task.status)),
-                        const SizedBox(width: 6),
-                        _Badge(label: task.priority, color: _priorityColor(task.priority)),
-                        if (task.escalationLevel > 0) ...[
+                    if (restricted)
+                      Row(children: [
+                        _Badge(label: task.status.replaceAll('_', ' '), color: Colors.blueGrey),
+                        const SizedBox(width: 8),
+                        Text('• • •  Restricted', style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade400, fontStyle: FontStyle.italic)),
+                        const Spacer(),
+                        if (task.departmentName != null)
+                          Text(task.departmentName!, style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade400)),
+                      ])
+                    else
+                      Row(
+                        children: [
+                          _Badge(label: task.status.replaceAll('_', ' '), color: _statusColor(task.status)),
                           const SizedBox(width: 6),
-                          _EscalationBadge(level: task.escalationLevel),
-                        ],
-                        if (task.assignedToName != null) ...[
-                          const SizedBox(width: 6),
-                          Icon(Icons.person_outline, size: 11, color: Colors.grey.shade500),
-                          const SizedBox(width: 2),
-                          Text(task.assignedToName!, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                        ],
-                        if (task.collaboratorNames.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          Icon(Icons.people_outline, size: 11, color: Colors.indigo.shade300),
-                          const SizedBox(width: 2),
+                          _Badge(label: task.priority, color: _priorityColor(task.priority)),
+                          if (task.escalationLevel > 0) ...[
+                            const SizedBox(width: 6),
+                            _EscalationBadge(level: task.escalationLevel),
+                          ],
+                          if (task.assignedToName != null) ...[
+                            const SizedBox(width: 6),
+                            Icon(Icons.person_outline, size: 11, color: Colors.grey.shade500),
+                            const SizedBox(width: 2),
+                            Text(task.assignedToName!, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                          ],
+                          if (task.collaboratorNames.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Icon(Icons.people_outline, size: 11, color: Colors.indigo.shade300),
+                            const SizedBox(width: 2),
+                            Text(
+                              '+${task.collaboratorNames.length}',
+                              style: TextStyle(fontSize: 11, color: Colors.indigo.shade400, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                          const Spacer(),
+                          Icon(Icons.calendar_today_outlined, size: 12, color: isOverdue ? Colors.red : Colors.grey),
+                          const SizedBox(width: 4),
                           Text(
-                            '+${task.collaboratorNames.length}',
-                            style: TextStyle(fontSize: 11, color: Colors.indigo.shade400, fontWeight: FontWeight.w600),
+                            task.dueDate != null
+                                ? DateFormat('MMM dd, yyyy').format(task.dueDate!.toLocal())
+                                : 'No due date',
+                            style: TextStyle(fontSize: 12, color: isOverdue ? Colors.red : Colors.grey.shade600),
                           ),
                         ],
-                        const Spacer(),
-                        Icon(Icons.calendar_today_outlined, size: 12, color: isOverdue ? Colors.red : Colors.grey),
-                        const SizedBox(width: 4),
-                        Text(
-                          task.dueDate != null
-                              ? DateFormat('MMM dd, yyyy').format(task.dueDate!.toLocal())
-                              : 'No due date',
-                          style: TextStyle(fontSize: 12, color: isOverdue ? Colors.red : Colors.grey.shade600),
-                        ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+              Icon(
+                restricted ? Icons.lock_outline : Icons.chevron_right,
+                color: restricted ? Colors.blueGrey.shade300 : Colors.grey,
+                size: 20,
+              ),
             ],
           ),
         ),

@@ -40,8 +40,9 @@ class TaskListState {
 class TaskNotifier extends Notifier<TaskListState> {
   @override
   TaskListState build() {
-    fetchTasks();
-    return const TaskListState();
+    // Defer until after state is initialized to avoid StateError on first access
+    Future.microtask(() => fetchTasks());
+    return const TaskListState(isLoading: true);
   }
 
   Dio get _dio => ref.read(dioProvider);
@@ -64,7 +65,8 @@ class TaskNotifier extends Notifier<TaskListState> {
 
       final List data = response.data['data']['tasks'];
       final tasks = data.map((j) => TaskModel.fromJson(j)).toList();
-      final total = response.data['data']['total'] as int;
+      final pagination = response.data['data']['pagination'] as Map<String, dynamic>? ?? {};
+      final total = (pagination['total'] as num?)?.toInt() ?? 0;
       final allTasks = reset ? tasks : [...state.tasks, ...tasks];
 
       state = state.copyWith(

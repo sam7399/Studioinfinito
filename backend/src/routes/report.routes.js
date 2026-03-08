@@ -46,6 +46,9 @@ router.get('/export', celebrate({ [Segments.QUERY]: filterQuery }), ReportContro
 // Export as multi-sheet Excel download
 router.get('/export-excel', celebrate({ [Segments.QUERY]: filterQuery }), ReportController.exportExcel);
 
+// HR appraisal performance matrix
+router.get('/hr-matrix', ReportController.getHRMatrix);
+
 // Send report via email
 router.post(
   '/email',

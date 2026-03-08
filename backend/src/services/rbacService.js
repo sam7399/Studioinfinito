@@ -49,35 +49,39 @@ class RBACService {
   }
 
   /**
-   * Get task visibility scope for user
+   * Get task visibility scope for user.
+   * All roles see all tasks in their company (cross-dept privacy masking applied after fetch).
+   * If no company_id, fall back to own tasks only.
    */
   static async getTaskVisibilityScope(user) {
-    const accessibleUserIds = await this.getAccessibleUserIds(user);
+    if (user.role === 'superadmin') return {};
 
-    const scope = {
-      [Op.or]: [
-        { created_by_user_id: { [Op.in]: accessibleUserIds } },
-        { assigned_to_user_id: { [Op.in]: accessibleUserIds } }
-      ]
-    };
-
-    // Add company scope for non-superadmin
-    if (user.role !== 'superadmin' && user.company_id) {
-      scope.company_id = user.company_id;
+    // Users with a company see all tasks in that company
+    if (user.company_id) {
+      return { company_id: user.company_id };
     }
 
-    return scope;
+    // No company assigned — only own tasks
+    return {
+      [Op.or]: [
+        { created_by_user_id: user.id },
+        { assigned_to_user_id: user.id }
+      ]
+    };
   }
 
   /**
-   * Check if user can view task details
+   * Check if user can view task details.
+   * All company members can view any company task (privacy masking applied at service layer).
    */
   static async canViewTask(user, task) {
-    const accessibleUserIds = await this.getAccessibleUserIds(user);
-    
+    if (user.role === 'superadmin') return true;
+    if (user.company_id && task.company_id === user.company_id) return true;
+
+    // Fallback: own tasks
     return (
-      accessibleUserIds.includes(task.created_by_user_id) ||
-      accessibleUserIds.includes(task.assigned_to_user_id)
+      task.created_by_user_id === user.id ||
+      task.assigned_to_user_id === user.id
     );
   }
 

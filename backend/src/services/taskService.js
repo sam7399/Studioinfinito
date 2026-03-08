@@ -4,7 +4,16 @@ const RBACService = require('./rbacService');
 const logger = require('../utils/logger');
 const Mailer = require('../mail/mailer');
 
-// Standard includes for task queries
+// Lightweight includes for list view — 5 simple JOINs, no many-to-many/nested
+const TASK_LIST_INCLUDES = [
+  { model: User, as: 'creator', attributes: ['id', 'name'] },
+  { model: User, as: 'assignee', attributes: ['id', 'name'] },
+  { model: Department, as: 'department', attributes: ['id', 'name'] },
+  { model: Location, as: 'location', attributes: ['id', 'name'] },
+  { model: Company, as: 'company', attributes: ['id', 'name'] }
+];
+
+// Full includes for single-task detail — collaborators + dependencies
 const TASK_INCLUDES = [
   { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
   { model: User, as: 'assignee', attributes: ['id', 'name', 'email'] },
@@ -26,15 +35,30 @@ const TASK_INCLUDES = [
 ];
 
 /**
- * Apply cross-department privacy: mask sensitive fields if viewer is in a different dept.
+ * Apply cross-department privacy: viewer outside the task's dept sees the title (header)
+ * but all sensitive details are masked — description, assignee, creator are hidden.
  */
-function applyPrivacy(task, viewerDeptId) {
+function applyPrivacy(task, viewer) {
   const taskJson = task.toJSON ? task.toJSON() : { ...task };
-  if (viewerDeptId && taskJson.department_id && taskJson.department_id !== viewerDeptId) {
-    taskJson.title = '***';
-    taskJson.description = '***';
-    taskJson._restricted = true;
+  const viewerDeptId = viewer?.department_id;
+  const viewerRole = viewer?.role;
+
+  // Managers / dept heads / management / superadmin see everything
+  if (['superadmin', 'management', 'department_head', 'manager'].includes(viewerRole)) {
+    return taskJson;
   }
+
+  // Same dept (or no dept info) → full view
+  if (!viewerDeptId || !taskJson.department_id || taskJson.department_id === viewerDeptId) {
+    return taskJson;
+  }
+
+  // Cross-dept: show title/status/priority/dates only, mask the rest
+  taskJson.description = null;
+  taskJson.assignee = null;
+  taskJson.creator = null;
+  taskJson.collaborators = [];
+  taskJson._restricted = true;
   return taskJson;
 }
 
@@ -98,38 +122,21 @@ class TaskService {
       ];
     }
 
-    // Base includes that don't depend on new tables
-    const SAFE_INCLUDES = TASK_INCLUDES.filter(
-      i => i.as !== 'collaborators' && i.as !== 'dependencies'
-    );
-
-    // Query tasks — try full includes first, fall back to safe includes
+    // Use lightweight includes for the list — no many-to-many/nested joins
     let count, tasks;
-    try {
-      ({ count, rows: tasks } = await Task.findAndCountAll({
-        where,
-        include: TASK_INCLUDES,
-        order: [[sort_by, sort_order.toUpperCase()]],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        distinct: true
-      }));
-    } catch (err) {
-      logger.warn('listTasks full includes failed, using safe includes:', err.message);
-      ({ count, rows: tasks } = await Task.findAndCountAll({
-        where,
-        include: SAFE_INCLUDES,
-        order: [[sort_by, sort_order.toUpperCase()]],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        distinct: true
-      }));
-    }
+    ({ count, rows: tasks } = await Task.findAndCountAll({
+      where,
+      include: TASK_LIST_INCLUDES,
+      order: [[sort_by, sort_order.toUpperCase()]],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true
+    }));
 
     // Apply privacy masking and collaborator visibility
     const processedTasks = tasks.map(t => {
       let taskData = buildCollaboratorView(t, user.id);
-      taskData = applyPrivacy(taskData, user.department_id);
+      taskData = applyPrivacy(taskData, user);
       return taskData;
     });
 
@@ -160,7 +167,7 @@ class TaskService {
     }
 
     let taskData = buildCollaboratorView(task, user.id);
-    taskData = applyPrivacy(taskData, user.department_id);
+    taskData = applyPrivacy(taskData, user);
     return taskData;
   }
 

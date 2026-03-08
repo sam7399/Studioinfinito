@@ -198,6 +198,12 @@ class _SideNav extends ConsumerWidget {
                   label: 'Import / Export',
                   path: '/import-export',
                   currentLoc: loc),
+            if (isManagement)
+              _NavItem(
+                  icon: Icons.assessment_outlined,
+                  label: 'HR Performance',
+                  path: '/hr-performance',
+                  currentLoc: loc),
             if (isSuperAdmin)
               _NavItem(
                   icon: Icons.corporate_fare_outlined,

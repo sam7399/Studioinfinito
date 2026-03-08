@@ -56,6 +56,7 @@ class ApiConstants {
   static const String reportExport = '/reports/export';
   static const String reportExcelExport = '/reports/export-excel';
   static const String reportEmail = '/reports/email';
+  static const String reportHRMatrix = '/reports/hr-matrix';
 
   // System Config
   static const String systemConfig = '/config';

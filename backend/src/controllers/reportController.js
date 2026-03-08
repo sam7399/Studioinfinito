@@ -582,6 +582,157 @@ class ReportController {
       next(error);
     }
   }
+
+  /**
+   * GET /reports/hr-matrix
+   * Returns per-employee performance metrics for the HR appraisal matrix.
+   * Uses 4 bulk GROUP BY queries instead of N×6 per-user queries.
+   */
+  static async getHRMatrix(req, res, next) {
+    try {
+      const { department_id, location_id } = req.query;
+      const requestingUser = req.user;
+      const { sequelize: seq } = require('../models');
+      const { TaskReview } = require('../models');
+      const now = new Date();
+
+      // 1. Fetch target users (1 query)
+      const userWhere = { is_active: true };
+      if (requestingUser.role !== 'superadmin') userWhere.company_id = requestingUser.company_id;
+      if (department_id) userWhere.department_id = department_id;
+      if (location_id) userWhere.location_id = location_id;
+
+      const users = await User.findAll({
+        where: userWhere,
+        attributes: ['id', 'name', 'email', 'designation', 'emp_code'],
+        include: [
+          { model: Department, as: 'department', attributes: ['id', 'name'] },
+          { model: Location, as: 'location', attributes: ['id', 'name'] }
+        ],
+        order: [['name', 'ASC']]
+      });
+
+      if (users.length === 0) return res.json({ success: true, data: [] });
+
+      const userIds = users.map(u => u.id);
+
+      // 2. Task status counts grouped by user (1 query)
+      const taskCounts = await Task.findAll({
+        where: { assigned_to_user_id: { [Op.in]: userIds } },
+        attributes: [
+          'assigned_to_user_id',
+          'status',
+          [seq.fn('COUNT', seq.col('id')), 'cnt']
+        ],
+        group: ['assigned_to_user_id', 'status'],
+        raw: true
+      });
+
+      // 3. Overdue counts grouped by user (1 query)
+      const overdueCounts = await Task.findAll({
+        where: {
+          assigned_to_user_id: { [Op.in]: userIds },
+          status: { [Op.notIn]: ['finalized', 'cancelled'] },
+          due_date: { [Op.lt]: now }
+        },
+        attributes: [
+          'assigned_to_user_id',
+          [seq.fn('COUNT', seq.col('id')), 'cnt']
+        ],
+        group: ['assigned_to_user_id'],
+        raw: true
+      });
+
+      // 4. Review averages grouped by assignee (1 query via JOIN)
+      const reviewStats = await TaskReview.findAll({
+        include: [{
+          model: Task, as: 'task',
+          where: { assigned_to_user_id: { [Op.in]: userIds } },
+          attributes: ['assigned_to_user_id']
+        }],
+        attributes: [
+          [seq.fn('COUNT', seq.col('TaskReview.id')), 'review_count'],
+          [seq.fn('AVG', seq.col('TaskReview.rating')), 'avg_rating'],
+          [seq.fn('AVG', seq.col('TaskReview.quality_score')), 'avg_quality'],
+          [seq.fn('AVG', seq.col('TaskReview.timeliness_score')), 'avg_timeliness']
+        ],
+        group: ['task.assigned_to_user_id'],
+        raw: true
+      });
+
+      // 5. On-time completion (finalized tasks with both dates) — 1 query
+      const finalizedRows = await Task.findAll({
+        where: {
+          assigned_to_user_id: { [Op.in]: userIds },
+          status: 'finalized',
+          completed_at: { [Op.ne]: null },
+          due_date: { [Op.ne]: null }
+        },
+        attributes: ['assigned_to_user_id', 'due_date', 'completed_at'],
+        raw: true
+      });
+
+      // Build lookup maps
+      const taskMap = {};   // uid → { total, open, in_progress, finalized }
+      for (const row of taskCounts) {
+        const uid = row.assigned_to_user_id;
+        if (!taskMap[uid]) taskMap[uid] = { total: 0, open: 0, in_progress: 0, finalized: 0 };
+        taskMap[uid].total += parseInt(row.cnt);
+        if (row.status === 'open') taskMap[uid].open = parseInt(row.cnt);
+        if (row.status === 'in_progress') taskMap[uid].in_progress = parseInt(row.cnt);
+        if (row.status === 'finalized') taskMap[uid].finalized = parseInt(row.cnt);
+      }
+
+      const overdueMap = {};
+      for (const row of overdueCounts) overdueMap[row.assigned_to_user_id] = parseInt(row.cnt);
+
+      const reviewMap = {};
+      for (const row of reviewStats) {
+        const uid = row['task.assigned_to_user_id'];
+        if (uid) reviewMap[uid] = row;
+      }
+
+      const onTimeMap = {};  // uid → { done, onTime }
+      for (const row of finalizedRows) {
+        const uid = row.assigned_to_user_id;
+        if (!onTimeMap[uid]) onTimeMap[uid] = { done: 0, onTime: 0 };
+        onTimeMap[uid].done++;
+        if (new Date(row.completed_at) <= new Date(row.due_date)) onTimeMap[uid].onTime++;
+      }
+
+      // Assemble matrix
+      const matrix = users.map(u => {
+        const uid = u.id;
+        const tc = taskMap[uid] || { total: 0, open: 0, in_progress: 0, finalized: 0 };
+        const rv = reviewMap[uid];
+        const ot = onTimeMap[uid];
+
+        return {
+          user: {
+            id: u.id, name: u.name, email: u.email,
+            designation: u.designation, emp_code: u.emp_code,
+            department: u.department ? { id: u.department.id, name: u.department.name } : null,
+            location: u.location ? { id: u.location.id, name: u.location.name } : null
+          },
+          total_tasks: tc.total,
+          open_tasks: tc.open,
+          in_progress_tasks: tc.in_progress,
+          completed_tasks: tc.finalized,
+          overdue_tasks: overdueMap[uid] || 0,
+          review_count: rv ? parseInt(rv.review_count) : 0,
+          avg_rating: rv?.avg_rating ? Math.round(parseFloat(rv.avg_rating) * 10) / 10 : null,
+          avg_quality_score: rv?.avg_quality ? Math.round(parseFloat(rv.avg_quality) * 10) / 10 : null,
+          avg_timeliness_score: rv?.avg_timeliness ? Math.round(parseFloat(rv.avg_timeliness) * 10) / 10 : null,
+          on_time_rate: ot ? Math.round((ot.onTime / ot.done) * 1000) / 10 : null
+        };
+      });
+
+      res.json({ success: true, data: matrix });
+    } catch (error) {
+      logger.error('HR matrix error:', error);
+      next(error);
+    }
+  }
 }
 
 module.exports = ReportController;

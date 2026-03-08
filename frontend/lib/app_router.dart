@@ -17,6 +17,7 @@ import 'features/org/views/org_manage_page.dart';
 import 'features/reports/views/reports_page.dart';
 import 'features/import_export/views/import_export_page.dart';
 import 'features/config/views/system_config_page.dart';
+import 'features/hr/views/hr_performance_page.dart';
 import 'widgets/app_shell.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -82,6 +83,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/reports', builder: (_, __) => const ReportsPage()),
           GoRoute(path: '/import-export', builder: (_, __) => const ImportExportPage()),
           GoRoute(path: '/system-config', builder: (_, __) => const SystemConfigPage()),
+          GoRoute(path: '/hr-performance', builder: (_, __) => const HRPerformancePage()),
         ],
       ),
     ],

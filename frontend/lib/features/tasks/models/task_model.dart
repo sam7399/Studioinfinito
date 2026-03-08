@@ -19,6 +19,7 @@ class TaskModel {
   final List<String> tags;
   final List<String> collaboratorNames;
   final int escalationLevel;
+  final bool isRestricted;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -43,6 +44,7 @@ class TaskModel {
     required this.tags,
     this.collaboratorNames = const [],
     this.escalationLevel = 0,
+    this.isRestricted = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -83,6 +85,7 @@ class TaskModel {
       tags: List<String>.from(json['tags'] ?? []),
       collaboratorNames: collabs,
       escalationLevel: (json['escalation_level'] as num?)?.toInt() ?? 0,
+      isRestricted: json['_restricted'] == true,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );
