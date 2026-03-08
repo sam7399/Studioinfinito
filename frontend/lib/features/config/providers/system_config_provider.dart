@@ -6,7 +6,11 @@ class SystemConfigState {
   final bool multiCompany;
   final bool multiLocation;
   final bool isLoading;
-  const SystemConfigState({this.multiCompany = false, this.multiLocation = false, this.isLoading = false});
+  const SystemConfigState({
+    this.multiCompany = false,
+    this.multiLocation = false,
+    this.isLoading = false,
+  });
   SystemConfigState copyWith({bool? multiCompany, bool? multiLocation, bool? isLoading}) =>
       SystemConfigState(
         multiCompany: multiCompany ?? this.multiCompany,
@@ -15,16 +19,17 @@ class SystemConfigState {
       );
 }
 
-class SystemConfigNotifier extends StateNotifier<SystemConfigState> {
-  final Ref _ref;
-  SystemConfigNotifier(this._ref) : super(const SystemConfigState()) {
+class SystemConfigNotifier extends Notifier<SystemConfigState> {
+  @override
+  SystemConfigState build() {
     load();
+    return const SystemConfigState();
   }
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true);
     try {
-      final dio = _ref.read(dioProvider);
+      final dio = ref.read(dioProvider);
       final res = await dio.get(ApiConstants.systemConfig);
       final data = res.data['data'] as Map<String, dynamic>;
       state = SystemConfigState(
@@ -38,7 +43,7 @@ class SystemConfigNotifier extends StateNotifier<SystemConfigState> {
 
   Future<bool> update(String key, bool value) async {
     try {
-      final dio = _ref.read(dioProvider);
+      final dio = ref.read(dioProvider);
       await dio.put(ApiConstants.systemConfigKey(key), data: {'value': value.toString()});
       await load();
       return true;
@@ -48,6 +53,6 @@ class SystemConfigNotifier extends StateNotifier<SystemConfigState> {
   }
 }
 
-final systemConfigProvider = StateNotifierProvider<SystemConfigNotifier, SystemConfigState>(
-  (ref) => SystemConfigNotifier(ref),
+final systemConfigProvider = NotifierProvider<SystemConfigNotifier, SystemConfigState>(
+  SystemConfigNotifier.new,
 );
