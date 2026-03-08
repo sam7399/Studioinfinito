@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../providers/user_provider.dart';
 import '../../org/providers/org_provider.dart';
+import '../../config/providers/system_config_provider.dart';
+import '../../../core/theme/app_theme.dart';
 
 class UserFormPage extends ConsumerStatefulWidget {
   const UserFormPage({super.key});
@@ -33,6 +35,8 @@ class _UserFormPageState extends ConsumerState<UserFormPage> {
   int? _locationId;
   int? _managerId;
   int? _departmentHeadId;
+  List<int> _companyIds = [];
+  List<int> _locationIds = [];
 
   bool _loading = false;
   String? _error;
@@ -66,14 +70,32 @@ class _UserFormPageState extends ConsumerState<UserFormPage> {
       _error = null;
     });
 
+    final config = ref.read(systemConfigProvider);
+
     final body = <String, dynamic>{
       'name': _nameCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
       'password': _passwordCtrl.text,
       'role': _role,
       'department_id': _departmentId,
-      'location_id': _locationId,
     };
+
+    // Company: send both single and multi depending on mode
+    if (config.multiCompany) {
+      body['company_ids'] = _companyIds;
+      body['company_id'] = _companyIds.isNotEmpty ? _companyIds.first : null;
+    } else {
+      body['company_id'] = _companyId;
+    }
+
+    // Location: send both single and multi depending on mode
+    if (config.multiLocation) {
+      body['location_ids'] = _locationIds;
+      body['location_id'] = _locationIds.isNotEmpty ? _locationIds.first : null;
+    } else {
+      body['location_id'] = _locationId;
+    }
+
     if (_phoneCtrl.text.isNotEmpty) body['phone'] = _phoneCtrl.text.trim();
     if (_empCodeCtrl.text.isNotEmpty) body['emp_code'] = _empCodeCtrl.text.trim();
     if (_usernameCtrl.text.isNotEmpty) body['username'] = _usernameCtrl.text.trim();
@@ -263,28 +285,44 @@ class _UserFormPageState extends ConsumerState<UserFormPage> {
                         ]),
                         const SizedBox(height: 16),
 
-                        // Company filter
-                        DropdownButtonFormField<int?>(
-                          value: _companyId,
-                          decoration: const InputDecoration(
-                            labelText: 'Select Company',
-                            border: OutlineInputBorder(),
-                            prefixIcon:
-                                Icon(Icons.business_outlined, size: 18),
-                          ),
-                          items: [
-                            const DropdownMenuItem(
-                                value: null,
-                                child: Text('-- Select Company --')),
-                            ...companies.map((c) => DropdownMenuItem(
-                                value: c.id, child: Text(c.name))),
-                          ],
-                          onChanged: (v) => setState(() {
-                            _companyId = v;
-                            _departmentId = null;
-                            _locationId = null;
-                          }),
-                        ),
+                        // Company filter (single or multi based on config)
+                        Consumer(builder: (context, ref, _) {
+                          final config = ref.watch(systemConfigProvider);
+                          if (!config.multiCompany) {
+                            return DropdownButtonFormField<int?>(
+                              value: _companyId,
+                              decoration: const InputDecoration(
+                                labelText: 'Select Company',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.business_outlined, size: 18),
+                              ),
+                              items: [
+                                const DropdownMenuItem(value: null, child: Text('-- Select Company --')),
+                                ...companies.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                              ],
+                              onChanged: (v) => setState(() {
+                                _companyId = v;
+                                _companyIds = v != null ? [v] : [];
+                                _departmentId = null;
+                                _locationId = null;
+                                _locationIds = [];
+                              }),
+                            );
+                          }
+                          return _MultiSelectField(
+                            label: 'Companies',
+                            icon: Icons.business_outlined,
+                            allItems: companies,
+                            selectedIds: _companyIds,
+                            onChanged: (ids) => setState(() {
+                              _companyIds = ids;
+                              _companyId = ids.isNotEmpty ? ids.first : null;
+                              _departmentId = null;
+                              _locationId = null;
+                              _locationIds = [];
+                            }),
+                          );
+                        }),
                         const SizedBox(height: 16),
 
                         _Row2([
@@ -308,27 +346,42 @@ class _UserFormPageState extends ConsumerState<UserFormPage> {
                             validator: (v) =>
                                 v == null ? 'Required' : null,
                           ),
-                          DropdownButtonFormField<int>(
-                            value: _locationId,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Location *',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(
-                                  Icons.location_on_outlined,
-                                  size: 18),
-                            ),
-                            items: locs
-                                .map((l) => DropdownMenuItem(
-                                    value: l.id,
-                                    child: Text(l.name,
-                                        overflow: TextOverflow.ellipsis)))
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => _locationId = v),
-                            validator: (v) =>
-                                v == null ? 'Required' : null,
-                          ),
+                          // Location (single or multi based on config)
+                          Consumer(builder: (context, ref, _) {
+                            final config = ref.watch(systemConfigProvider);
+                            if (!config.multiLocation) {
+                              return DropdownButtonFormField<int>(
+                                value: _locationId,
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Location *',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.location_on_outlined, size: 18),
+                                ),
+                                items: locs
+                                    .map((l) => DropdownMenuItem(
+                                        value: l.id,
+                                        child: Text(l.name,
+                                            overflow: TextOverflow.ellipsis)))
+                                    .toList(),
+                                onChanged: (v) => setState(() {
+                                  _locationId = v;
+                                  _locationIds = v != null ? [v] : [];
+                                }),
+                                validator: (v) => v == null ? 'Required' : null,
+                              );
+                            }
+                            return _MultiSelectField(
+                              label: 'Locations',
+                              icon: Icons.location_on_outlined,
+                              allItems: locs,
+                              selectedIds: _locationIds,
+                              onChanged: (ids) => setState(() {
+                                _locationIds = ids;
+                                _locationId = ids.isNotEmpty ? ids.first : null;
+                              }),
+                            );
+                          }),
                         ]),
                       ],
                     ),
@@ -560,6 +613,131 @@ class _Field extends StatelessWidget {
         prefixIcon: icon != null ? Icon(icon, size: 18) : null,
       ),
       validator: validator,
+    );
+  }
+}
+
+// ── Multi-select field ────────────────────────────────────────────────────────
+
+class _MultiSelectField extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final List<OrgItem> allItems;
+  final List<int> selectedIds;
+  final ValueChanged<List<int>> onChanged;
+  const _MultiSelectField({
+    required this.label,
+    required this.icon,
+    required this.allItems,
+    required this.selectedIds,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = allItems.where((i) => selectedIds.contains(i.id)).toList();
+    return InkWell(
+      onTap: () async {
+        final result = await showDialog<List<int>>(
+          context: context,
+          builder: (_) => _MultiSelectDialog(
+            label: label,
+            allItems: allItems,
+            initialSelected: List.from(selectedIds),
+          ),
+        );
+        if (result != null) onChanged(result);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          prefixIcon: Icon(icon, size: 18),
+          suffixIcon: const Icon(Icons.arrow_drop_down),
+        ),
+        child: selected.isEmpty
+            ? Text('Select $label',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 14))
+            : Wrap(
+                spacing: 6,
+                children: selected
+                    .map((item) => Chip(
+                          label: Text(item.name,
+                              style: const TextStyle(fontSize: 12)),
+                          deleteIcon: const Icon(Icons.close, size: 14),
+                          onDeleted: () {
+                            final newIds = List<int>.from(selectedIds)
+                              ..remove(item.id);
+                            onChanged(newIds);
+                          },
+                          backgroundColor:
+                              GemColors.green.withOpacity(0.12),
+                          side: BorderSide(
+                              color: GemColors.green.withOpacity(0.3)),
+                        ))
+                    .toList(),
+              ),
+      ),
+    );
+  }
+}
+
+class _MultiSelectDialog extends StatefulWidget {
+  final String label;
+  final List<OrgItem> allItems;
+  final List<int> initialSelected;
+  const _MultiSelectDialog({
+    required this.label,
+    required this.allItems,
+    required this.initialSelected,
+  });
+
+  @override
+  State<_MultiSelectDialog> createState() => _MultiSelectDialogState();
+}
+
+class _MultiSelectDialogState extends State<_MultiSelectDialog> {
+  late List<int> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = List.from(widget.initialSelected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Select ${widget.label}'),
+      content: SizedBox(
+        width: 300,
+        child: ListView(
+          shrinkWrap: true,
+          children: widget.allItems
+              .map((item) => CheckboxListTile(
+                    title: Text(item.name),
+                    value: _selected.contains(item.id),
+                    onChanged: (v) => setState(() {
+                      if (v == true) {
+                        _selected.add(item.id);
+                      } else {
+                        _selected.remove(item.id);
+                      }
+                    }),
+                    activeColor: GemColors.green,
+                    dense: true,
+                  ))
+              .toList(),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () => Navigator.pop(context, _selected),
+            child: const Text('Done')),
+      ],
     );
   }
 }

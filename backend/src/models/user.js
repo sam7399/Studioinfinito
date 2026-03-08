@@ -230,6 +230,19 @@ module.exports = (sequelize, DataTypes) => {
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE'
     });
+
+    User.belongsToMany(models.Company, {
+      through: models.UserCompany,
+      foreignKey: 'user_id',
+      otherKey: 'company_id',
+      as: 'companies'
+    });
+    User.belongsToMany(models.Location, {
+      through: models.UserLocation,
+      foreignKey: 'user_id',
+      otherKey: 'location_id',
+      as: 'locations'
+    });
   };
 
   // Instance methods

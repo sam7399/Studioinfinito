@@ -69,6 +69,13 @@ module.exports = (sequelize, DataTypes) => {
       onUpdate: 'CASCADE',
       onDelete: 'RESTRICT'
     });
+
+    Company.belongsToMany(models.User, {
+      through: models.UserCompany,
+      foreignKey: 'company_id',
+      otherKey: 'user_id',
+      as: 'multi_users'
+    });
   };
 
   return Company;

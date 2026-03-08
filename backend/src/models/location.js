@@ -65,6 +65,13 @@ module.exports = (sequelize, DataTypes) => {
       onUpdate: 'CASCADE',
       onDelete: 'RESTRICT'
     });
+
+    Location.belongsToMany(models.User, {
+      through: models.UserLocation,
+      foreignKey: 'location_id',
+      otherKey: 'user_id',
+      as: 'multi_users'
+    });
   };
 
   return Location;

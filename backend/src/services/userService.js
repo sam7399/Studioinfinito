@@ -1,5 +1,5 @@
 const bcrypt = require('bcrypt');
-const { User, Task, Department, Location, Company, TaskReview } = require('../models');
+const { User, Task, Department, Location, Company, TaskReview, UserCompany, UserLocation } = require('../models');
 const { Op } = require('sequelize');
 const RBACService = require('./rbacService');
 const logger = require('../utils/logger');
@@ -322,6 +322,21 @@ class UserService {
 
     logger.info(`User created: ${user.email} by ${requestingUser.email}`);
 
+    // Handle multi-company assignments
+    if (Array.isArray(userData.company_ids) && userData.company_ids.length > 0) {
+      await UserCompany.destroy({ where: { user_id: user.id } });
+      for (let i = 0; i < userData.company_ids.length; i++) {
+        await UserCompany.create({ user_id: user.id, company_id: userData.company_ids[i], is_primary: i === 0 });
+      }
+    }
+    // Handle multi-location assignments
+    if (Array.isArray(userData.location_ids) && userData.location_ids.length > 0) {
+      await UserLocation.destroy({ where: { user_id: user.id } });
+      for (let i = 0; i < userData.location_ids.length; i++) {
+        await UserLocation.create({ user_id: user.id, location_id: userData.location_ids[i], is_primary: i === 0 });
+      }
+    }
+
     // Remove password from response
     const userResponse = user.toJSON();
     delete userResponse.password_hash;
@@ -374,6 +389,21 @@ class UserService {
     await user.update(updates);
 
     logger.info(`User updated: ${user.email} by ${requestingUser.email}`);
+
+    // Handle multi-company assignments
+    if (Array.isArray(updates.company_ids) && updates.company_ids.length > 0) {
+      await UserCompany.destroy({ where: { user_id: user.id } });
+      for (let i = 0; i < updates.company_ids.length; i++) {
+        await UserCompany.create({ user_id: user.id, company_id: updates.company_ids[i], is_primary: i === 0 });
+      }
+    }
+    // Handle multi-location assignments
+    if (Array.isArray(updates.location_ids) && updates.location_ids.length > 0) {
+      await UserLocation.destroy({ where: { user_id: user.id } });
+      for (let i = 0; i < updates.location_ids.length; i++) {
+        await UserLocation.create({ user_id: user.id, location_id: updates.location_ids[i], is_primary: i === 0 });
+      }
+    }
 
     // Remove password from response
     const userResponse = user.toJSON();

@@ -57,6 +57,10 @@ class ApiConstants {
   static const String reportExcelExport = '/reports/export-excel';
   static const String reportEmail = '/reports/email';
 
+  // System Config
+  static const String systemConfig = '/config';
+  static String systemConfigKey(String key) => '/config/$key';
+
   // Health
   static const String health = '/health';
 }

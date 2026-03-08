@@ -80,6 +80,57 @@ async function ensureSchema() {
       logger.info('[schema] Created table task_attachments');
     }
 
+    if (!tables.includes('system_configs')) {
+      await sequelize.query(`
+        CREATE TABLE system_configs (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          \`key\` VARCHAR(100) NOT NULL UNIQUE,
+          value TEXT NOT NULL DEFAULT 'false',
+          description VARCHAR(255) NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      await sequelize.query(`INSERT INTO system_configs (\`key\`, value, description) VALUES
+        ('multi_company_users', 'false', 'Allow users to belong to multiple companies'),
+        ('multi_location_users', 'false', 'Allow users to belong to multiple locations')`);
+      logger.info('[schema] Created table system_configs');
+    }
+
+    if (!tables.includes('user_companies')) {
+      await sequelize.query(`
+        CREATE TABLE user_companies (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          company_id INT NOT NULL,
+          is_primary TINYINT(1) NOT NULL DEFAULT 0,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_uc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT fk_uc_company FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE KEY uc_user_company_unique (user_id, company_id)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      logger.info('[schema] Created table user_companies');
+    }
+
+    if (!tables.includes('user_locations')) {
+      await sequelize.query(`
+        CREATE TABLE user_locations (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          location_id INT NOT NULL,
+          is_primary TINYINT(1) NOT NULL DEFAULT 0,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_ul_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT fk_ul_location FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE KEY ul_user_location_unique (user_id, location_id)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      logger.info('[schema] Created table user_locations');
+    }
+
     logger.info('[schema] Schema check complete');
   } catch (err) {
     logger.error('[schema] Schema ensure error:', err.message);

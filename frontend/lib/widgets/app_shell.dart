@@ -204,6 +204,12 @@ class _SideNav extends ConsumerWidget {
                   label: 'Organization',
                   path: '/org',
                   currentLoc: loc),
+            if (isSuperAdmin)
+              _NavItem(
+                  icon: Icons.settings_outlined,
+                  label: 'System Config',
+                  path: '/system-config',
+                  currentLoc: loc),
 
             const SizedBox(height: 8),
             Padding(

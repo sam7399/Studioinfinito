@@ -9,6 +9,7 @@ const taskRoutes = require('./task.routes');
 const userRoutes = require('./user.routes');
 const orgRoutes = require('./org.routes');
 const reportRoutes = require('./report.routes');
+const configRoutes = require('./config.routes');
 
 // Health check (no auth required)
 router.use('/health', healthRoutes);
@@ -22,5 +23,6 @@ router.use('/tasks', taskRoutes);
 router.use('/users', userRoutes);
 router.use('/org', orgRoutes);
 router.use('/reports', reportRoutes);
+router.use('/config', configRoutes);
 
 module.exports = router;

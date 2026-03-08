@@ -6,6 +6,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/networking/dio_client.dart';
 import '../../core/networking/token_service.dart';
 import '../../core/storage/storage_service.dart';
+import '../../features/config/providers/system_config_provider.dart';
 
 class AuthState {
   final String? token;
@@ -43,6 +44,7 @@ class AuthNotifier extends Notifier<AuthState> {
   AuthState build() {
     TokenService.instance.onUnauthorized = () => logout();
     _restoreSession();
+    ref.read(systemConfigProvider); // preload config
     return const AuthState();
   }
 
