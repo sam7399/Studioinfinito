@@ -24,6 +24,25 @@ const PORT = config.port;
 async function ensureSchema() {
   const qi = sequelize.getQueryInterface();
   try {
+    // Ensure task_reviews has rating columns (added for HR matrix)
+    try {
+      const reviewCols = await qi.describeTable('task_reviews');
+      if (!reviewCols.rating) {
+        await sequelize.query('ALTER TABLE task_reviews ADD COLUMN rating DECIMAL(3,1) NULL');
+        console.log('[schema] Added column task_reviews.rating');
+      }
+      if (!reviewCols.quality_score) {
+        await sequelize.query('ALTER TABLE task_reviews ADD COLUMN quality_score DECIMAL(3,1) NULL');
+        console.log('[schema] Added column task_reviews.quality_score');
+      }
+      if (!reviewCols.timeliness_score) {
+        await sequelize.query('ALTER TABLE task_reviews ADD COLUMN timeliness_score DECIMAL(3,1) NULL');
+        console.log('[schema] Added column task_reviews.timeliness_score');
+      }
+    } catch (e) {
+      console.log('[schema] task_reviews check skipped:', e.message);
+    }
+
     console.log('[STARTUP] ensureSchema: describing tasks table...');
     const cols = await qi.describeTable('tasks');
 

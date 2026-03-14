@@ -29,6 +29,18 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
+    rating: {
+      type: DataTypes.DECIMAL(3, 1),
+      allowNull: true
+    },
+    quality_score: {
+      type: DataTypes.DECIMAL(3, 1),
+      allowNull: true
+    },
+    timeliness_score: {
+      type: DataTypes.DECIMAL(3, 1),
+      allowNull: true
+    },
     created_at: {
       type: DataTypes.DATE,
       allowNull: false,
