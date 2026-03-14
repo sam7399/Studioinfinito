@@ -99,7 +99,7 @@ async function ensureSchema() {
         CREATE TABLE system_configs (
           id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
           \`key\` VARCHAR(100) NOT NULL UNIQUE,
-          value TEXT NOT NULL DEFAULT 'false',
+          value TEXT NOT NULL,
           description VARCHAR(255) NULL,
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
