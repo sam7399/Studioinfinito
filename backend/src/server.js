@@ -1,10 +1,14 @@
-console.log('[STARTUP:1] server.js loading modules...');
+console.log('[S1] loading app...');
 const app = require('./app');
+console.log('[S2] loading config...');
 const config = require('./config');
+console.log('[S3] loading models...');
 const { sequelize, Sequelize } = require('./models');
+console.log('[S4] loading cron...');
 const { startCronJobs, stopCronJobs } = require('./cron');
+console.log('[S5] loading logger...');
 const logger = require('./utils/logger');
-console.log('[STARTUP:2] All modules loaded');
+console.log('[S6] all modules loaded');
 
 const PORT = config.port;
 
