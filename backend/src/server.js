@@ -139,7 +139,28 @@ async function ensureSchema() {
 
 let server;
 
-sequelize.authenticate()
+// DB connect with retry — handles Railway TCP proxy cold starts and
+// Render zero-downtime deploys where old instance holds connections.
+async function connectWithRetry(retries = 5, delayMs = 3000) {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      await sequelize.authenticate();
+      return; // success
+    } catch (err) {
+      // Use console.error so the message is ALWAYS flushed to Render logs
+      console.error(`[DB] Connection attempt ${i}/${retries} failed: ${err.message}`);
+      if (i < retries) {
+        console.error(`[DB] Retrying in ${delayMs / 1000}s…`);
+        await new Promise(r => setTimeout(r, delayMs));
+      } else {
+        console.error('[DB] All retries exhausted. Exiting.');
+        process.exit(1);
+      }
+    }
+  }
+}
+
+connectWithRetry()
   .then(async () => {
     logger.info('Database connection established successfully');
 
@@ -179,10 +200,6 @@ sequelize.authenticate()
       logger.info(`App URL: ${config.urls.app}`);
       startCronJobs();
     });
-  })
-  .catch(err => {
-    logger.error('Unable to connect to database:', err);
-    process.exit(1);
   });
 
 // Graceful shutdown
