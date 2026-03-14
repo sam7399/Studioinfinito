@@ -40,9 +40,8 @@ class TaskListState {
 class TaskNotifier extends Notifier<TaskListState> {
   @override
   TaskListState build() {
-    // Defer until after state is initialized to avoid StateError on first access
     Future.microtask(() => fetchTasks());
-    return const TaskListState(isLoading: true);
+    return const TaskListState(isLoading: false);
   }
 
   Dio get _dio => ref.read(dioProvider);

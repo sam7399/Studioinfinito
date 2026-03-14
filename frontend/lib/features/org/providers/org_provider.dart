@@ -52,7 +52,7 @@ final locationsProvider = FutureProvider.autoDispose.family<List<OrgItem>, int?>
 final allUsersProvider = FutureProvider.autoDispose<List<OrgItem>>((ref) async {
   if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/users', queryParameters: {'limit': 500});
+  final res = await dio.get(ApiConstants.users, queryParameters: {'limit': 500});
   final List data = res.data['data']['users'] ?? [];
   return data
       .map((j) => OrgItem(
@@ -67,7 +67,7 @@ final allUsersProvider = FutureProvider.autoDispose<List<OrgItem>>((ref) async {
 final managersDropdownProvider = FutureProvider.autoDispose<List<OrgItem>>((ref) async {
   if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/users', queryParameters: {'limit': 500});
+  final res = await dio.get(ApiConstants.users, queryParameters: {'limit': 500});
   final List data = res.data['data']['users'] ?? [];
   const managerRoles = {'manager', 'department_head', 'management', 'superadmin'};
   return data
@@ -80,7 +80,7 @@ final managersDropdownProvider = FutureProvider.autoDispose<List<OrgItem>>((ref)
 final deptHeadsDropdownProvider = FutureProvider.autoDispose<List<OrgItem>>((ref) async {
   if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/users', queryParameters: {'limit': 500});
+  final res = await dio.get(ApiConstants.users, queryParameters: {'limit': 500});
   final List data = res.data['data']['users'] ?? [];
   const headRoles = {'department_head', 'management', 'superadmin'};
   return data
