@@ -726,6 +726,15 @@ class TaskService {
       avgCompletionTime = totalTime / completedTasks.length / (1000 * 60 * 60 * 24); // Convert to days
     }
 
+    // Get overdue task count
+    const overdueCount = await Task.count({
+      where: {
+        ...where,
+        status: { [Op.notIn]: ['finalized'] },
+        due_date: { [Op.lt]: new Date() }
+      }
+    });
+
     return {
       status_counts: statusCounts.reduce((acc, item) => {
         acc[item.status] = parseInt(item.dataValues.count);
@@ -736,7 +745,8 @@ class TaskService {
         return acc;
       }, {}),
       avg_completion_days: Math.round(avgCompletionTime * 10) / 10,
-      total_tasks: statusCounts.reduce((sum, item) => sum + parseInt(item.dataValues.count), 0)
+      total_tasks: statusCounts.reduce((sum, item) => sum + parseInt(item.dataValues.count), 0),
+      overdue_tasks: overdueCount
     };
   }
 }
