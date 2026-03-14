@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../providers/task_provider.dart';
 import '../models/task_model.dart';
+import '../../../auth/providers/auth_provider.dart';
 
 class TaskListPage extends ConsumerStatefulWidget {
   const TaskListPage({super.key});
@@ -37,6 +38,8 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(taskProvider);
+    final userRole = ref.watch(authProvider).user?.role ?? '';
+    final canCreateTask = userRole != 'employee';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -56,17 +59,19 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                     ],
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: () => context.go('/tasks/create-multi'),
-                  icon: const Icon(Icons.playlist_add, size: 18),
-                  label: const Text('Create Multiple'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: () => context.go('/tasks/create'),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('New Task'),
-                ),
+                if (canCreateTask) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/tasks/create-multi'),
+                    icon: const Icon(Icons.playlist_add, size: 18),
+                    label: const Text('Create Multiple'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: () => context.go('/tasks/create'),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('New Task'),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),

@@ -138,10 +138,9 @@ router.post(
   taskController.submitReview
 );
 
-// Get task statistics (management and superadmin only)
+// Get task statistics (all authenticated users — service applies visibility scope)
 router.get(
   '/stats/overview',
-  requireRole('superadmin', 'management'),
   celebrate({
     [Segments.QUERY]: Joi.object({
       start_date: Joi.date().iso(),

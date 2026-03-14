@@ -673,13 +673,11 @@ class TaskService {
   static async getStatistics(filters, user) {
     const { start_date, end_date, department_id, location_id } = filters;
 
-    // Build where clause
-    const where = {};
-    
-    if (user.role !== 'superadmin') {
-      where.company_id = user.company_id;
-    }
+    // Build where clause using RBAC visibility scope
+    const visibilityScope = await RBACService.getTaskVisibilityScope(user);
+    const where = { ...visibilityScope };
 
+    // Management-level can further filter by dept/location
     if (department_id) where.department_id = department_id;
     if (location_id) where.location_id = location_id;
 

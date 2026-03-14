@@ -45,13 +45,19 @@ final statsProvider = FutureProvider<TaskStats>((ref) async {
   }
 });
 
-// Filtered stats for reports page
+// Filtered stats for reports page — key is query string to avoid Map equality bug
 final filteredStatsProvider =
-    FutureProvider.family<TaskStats, Map<String, String>>((ref, params) async {
+    FutureProvider.family<TaskStats, String>((ref, queryString) async {
   final dio = ref.watch(dioProvider);
   try {
-    final response = await dio.get(ApiConstants.taskStats,
-        queryParameters: params.isEmpty ? null : params);
+    // Parse key=value&key=value back into a map
+    final params = queryString.isEmpty
+        ? null
+        : Map.fromEntries(queryString.split('&').map((e) {
+            final kv = e.split('=');
+            return MapEntry(kv[0], kv.length > 1 ? kv[1] : '');
+          }));
+    final response = await dio.get(ApiConstants.taskStats, queryParameters: params);
     return TaskStats.fromJson(response.data['data'] ?? {});
   } catch (_) {
     return const TaskStats();
