@@ -200,6 +200,11 @@ connectWithRetry()
       logger.info(`App URL: ${config.urls.app}`);
       startCronJobs();
     });
+  })
+  .catch(err => {
+    console.error('[STARTUP] Fatal error during startup:', err.message);
+    console.error(err.stack);
+    process.exit(1);
   });
 
 // Graceful shutdown
@@ -239,13 +244,14 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
+  console.error('[uncaughtException]', err.message);
+  console.error(err.stack);
   gracefulShutdown('uncaughtException');
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('[unhandledRejection] reason:', reason instanceof Error ? reason.stack : reason);
   gracefulShutdown('unhandledRejection');
 });
 
