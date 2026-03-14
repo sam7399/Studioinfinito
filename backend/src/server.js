@@ -1,8 +1,10 @@
+console.log('[STARTUP:1] server.js loading modules...');
 const app = require('./app');
 const config = require('./config');
 const { sequelize, Sequelize } = require('./models');
 const { startCronJobs, stopCronJobs } = require('./cron');
 const logger = require('./utils/logger');
+console.log('[STARTUP:2] All modules loaded');
 
 const PORT = config.port;
 
@@ -11,6 +13,7 @@ const PORT = config.port;
 async function ensureSchema() {
   const qi = sequelize.getQueryInterface();
   try {
+    console.log('[STARTUP] ensureSchema: describing tasks table...');
     const cols = await qi.describeTable('tasks');
 
     if (!cols.show_collaborators) {
@@ -131,9 +134,9 @@ async function ensureSchema() {
       logger.info('[schema] Created table user_locations');
     }
 
-    logger.info('[schema] Schema check complete');
+    console.log('[STARTUP] ensureSchema complete');
   } catch (err) {
-    logger.error('[schema] Schema ensure error:', err.message);
+    console.log('[STARTUP] ensureSchema error (non-fatal):', err.message);
   }
 }
 
@@ -144,28 +147,32 @@ let server;
 async function connectWithRetry(retries = 5, delayMs = 3000) {
   for (let i = 1; i <= retries; i++) {
     try {
+      console.log(`[DB] Connection attempt ${i}/${retries}...`);
       await sequelize.authenticate();
+      console.log('[DB] Connected successfully');
       return; // success
     } catch (err) {
-      // Use console.error so the message is ALWAYS flushed to Render logs
-      console.error(`[DB] Connection attempt ${i}/${retries} failed: ${err.message}`);
+      console.log(`[DB] Attempt ${i}/${retries} failed: ${err.message}`);
       if (i < retries) {
-        console.error(`[DB] Retrying in ${delayMs / 1000}s…`);
+        console.log(`[DB] Retrying in ${delayMs / 1000}s...`);
         await new Promise(r => setTimeout(r, delayMs));
       } else {
-        console.error('[DB] All retries exhausted. Exiting.');
+        console.log('[DB] All retries exhausted. Exiting.');
         process.exit(1);
       }
     }
   }
 }
 
+console.log('[STARTUP:3] Starting DB connection...');
 connectWithRetry()
   .then(async () => {
     logger.info('Database connection established successfully');
+    console.log('[STARTUP:4] DB ready, running schema check...');
 
     // 1. Direct schema ensure (reliable, runs every startup)
     await ensureSchema();
+    console.log('[STARTUP:5] Schema check done, running migrations...');
 
     // 2. Umzug migrations for any remaining pending migrations
     try {
@@ -190,20 +197,23 @@ connectWithRetry()
         logger.info('Migrations complete');
       }
     } catch (err) {
-      logger.error('Migration error (non-fatal):', err.message);
+      console.log('[STARTUP] Migration error (non-fatal):', err.message);
     }
 
+    console.log('[STARTUP:6] Starting HTTP server on port', PORT);
     // 3. Start HTTP server only after DB is ready
     server = app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT} in ${config.nodeEnv} mode`);
       logger.info(`API URL: ${config.urls.api}`);
       logger.info(`App URL: ${config.urls.app}`);
+      console.log('[STARTUP:7] Server up. Starting cron jobs...');
       startCronJobs();
+      console.log('[STARTUP:8] All systems go.');
     });
   })
   .catch(err => {
-    console.error('[STARTUP] Fatal error during startup:', err.message);
-    console.error(err.stack);
+    console.log('[STARTUP] FATAL ERROR:', err.message);
+    console.log(err.stack);
     process.exit(1);
   });
 
@@ -215,10 +225,10 @@ const gracefulShutdown = (signal) => {
   const closeServer = (cb) => server ? server.close(cb) : cb();
   closeServer(() => {
     logger.info('HTTP server closed');
-    
+
     // Stop cron jobs
     stopCronJobs();
-    
+
     // Close database connection
     sequelize.close()
       .then(() => {
@@ -244,14 +254,14 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  console.error('[uncaughtException]', err.message);
-  console.error(err.stack);
+  console.log('[uncaughtException]', err.message);
+  console.log(err.stack);
   gracefulShutdown('uncaughtException');
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('[unhandledRejection] reason:', reason instanceof Error ? reason.stack : reason);
+  console.log('[unhandledRejection] reason:', reason instanceof Error ? reason.stack : reason);
   gracefulShutdown('unhandledRejection');
 });
 

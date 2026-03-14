@@ -17,6 +17,9 @@ const sequelize = new Sequelize(
       acquire: 60000,
       idle: 10000
     },
+    dialectOptions: {
+      connectTimeout: 20000
+    },
     define: {
       charset: 'utf8mb4',
       collate: 'utf8mb4_unicode_ci',
