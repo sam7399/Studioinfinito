@@ -43,9 +43,10 @@ router.get(
   taskController.getTask
 );
 
-// Create task (supports multi-assignee via assigned_to_ids, visibility, dependency)
+// Create task — only managers and above can assign work
 router.post(
   '/',
+  requireRole('superadmin', 'management', 'department_head', 'manager'),
   celebrate({
     [Segments.BODY]: Joi.object({
       title: Joi.string().required().max(255),
