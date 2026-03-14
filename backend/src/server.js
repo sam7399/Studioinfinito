@@ -1,14 +1,21 @@
-console.log('[S1] loading app...');
-const app = require('./app');
-console.log('[S2] loading config...');
-const config = require('./config');
-console.log('[S3] loading models...');
-const { sequelize, Sequelize } = require('./models');
-console.log('[S4] loading cron...');
-const { startCronJobs, stopCronJobs } = require('./cron');
-console.log('[S5] loading logger...');
-const logger = require('./utils/logger');
-console.log('[S6] all modules loaded');
+let app, config, sequelize, Sequelize, startCronJobs, stopCronJobs, logger;
+try {
+  console.log('[S1] loading app...');
+  app = require('./app');
+  console.log('[S2] loading config...');
+  config = require('./config');
+  console.log('[S3] loading models...');
+  ({ sequelize, Sequelize } = require('./models'));
+  console.log('[S4] loading cron...');
+  ({ startCronJobs, stopCronJobs } = require('./cron'));
+  console.log('[S5] loading logger...');
+  logger = require('./utils/logger');
+  console.log('[S6] all modules loaded');
+} catch (err) {
+  console.log('[REQUIRE ERROR]', err.message);
+  console.log(err.stack);
+  process.exit(1);
+}
 
 const PORT = config.port;
 
