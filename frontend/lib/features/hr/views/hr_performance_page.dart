@@ -16,14 +16,10 @@ class _HRPerformancePageState extends ConsumerState<HRPerformancePage> {
   String _sortCol = 'name';
   bool _sortAsc = true;
 
-  Map<String, dynamic> get _filters => {
-    if (_deptFilter != null) 'department_id': _deptFilter,
-  };
-
   @override
   Widget build(BuildContext context) {
     final depts = ref.watch(departmentsProvider(null)).maybeWhen(data: (d) => d, orElse: () => <OrgItem>[]);
-    final matrixAsync = ref.watch(hrMatrixProvider(_filters));
+    final matrixAsync = ref.watch(hrMatrixProvider(_deptFilter));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),

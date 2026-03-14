@@ -67,10 +67,12 @@ class HREmployeeRow {
   }
 }
 
-final hrMatrixProvider = FutureProvider.autoDispose.family<List<HREmployeeRow>, Map<String, dynamic>>((ref, filters) async {
+// Key: department_id (null = all departments). Using int? avoids Map equality issues.
+final hrMatrixProvider = FutureProvider.autoDispose.family<List<HREmployeeRow>, int?>((ref, departmentId) async {
   if (!ref.watch(authProvider.select((s) => s.isAuthenticated))) return [];
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/reports/hr-matrix', queryParameters: filters.isEmpty ? null : filters);
+  final res = await dio.get('/reports/hr-matrix',
+      queryParameters: departmentId != null ? {'department_id': departmentId} : null);
   final List data = res.data['data'] ?? [];
   return data.map((j) => HREmployeeRow.fromJson(j as Map<String, dynamic>)).toList();
 });
