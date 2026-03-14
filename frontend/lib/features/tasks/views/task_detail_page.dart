@@ -189,6 +189,85 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     }
 
     final task = _task!;
+
+    // ── Restricted (cross-department) view ────────────────────────
+    if (task.isRestricted) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                      onPressed: () => context.go('/tasks'),
+                      icon: const Icon(Icons.arrow_back)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(task.title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _Card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lock_outline, size: 16, color: Colors.blueGrey.shade400),
+                        const SizedBox(width: 8),
+                        Text('Cross-Department Task',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.blueGrey.shade500,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Details are only visible to the task\'s department.',
+                      style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade400),
+                    ),
+                    const Divider(height: 28),
+                    if (task.dueDate != null)
+                      Row(
+                        children: [
+                          Icon(Icons.flag_outlined, size: 16, color: Colors.blueGrey.shade500),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Target Date',
+                                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+                              Text(
+                                DateFormat('MMMM dd, yyyy').format(task.dueDate!.toLocal()),
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    else
+                      Text('No target date set.',
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ── Full detail view ──────────────────────────────────────────
     final daysLeft = task.dueDate != null
         ? task.dueDate!.difference(DateTime.now()).inDays
         : null;

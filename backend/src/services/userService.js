@@ -359,6 +359,11 @@ class UserService {
       throw new Error('Permission denied');
     }
 
+    // Superadmin with DEMO_SUPERADMIN lock — block any password change from the app
+    if (user.emp_code === 'DEMO_SUPERADMIN' && updates.password) {
+      throw new Error('The superadmin password is locked and cannot be changed from the application. Contact the system owner to update it directly in the database.');
+    }
+
     // Don't allow changing company unless superadmin
     if (updates.company_id && requestingUser.role !== 'superadmin') {
       delete updates.company_id;

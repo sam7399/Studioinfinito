@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'auth/providers/auth_provider.dart';
@@ -20,13 +21,27 @@ import 'features/config/views/system_config_page.dart';
 import 'features/hr/views/hr_performance_page.dart';
 import 'widgets/app_shell.dart';
 
+/// Bridges Riverpod auth state into a ChangeNotifier so GoRouter's
+/// refreshListenable can re-evaluate redirects without recreating the router.
+class _AuthRouterNotifier extends ChangeNotifier {
+  _AuthRouterNotifier(this._ref) {
+    _ref.listen<AuthState>(authProvider, (_, __) => notifyListeners());
+  }
+  final Ref _ref;
+
+  AuthState get authState => _ref.read(authProvider);
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final notifier = _AuthRouterNotifier(ref);
+  ref.onDispose(notifier.dispose);
 
   return GoRouter(
     initialLocation: '/login',
+    refreshListenable: notifier,
     redirect: (context, state) {
-      final isLoggedIn = authState.isAuthenticated;
+      final auth = notifier.authState;
+      final isLoggedIn = auth.isAuthenticated;
       final loc = state.matchedLocation;
 
       final isPublic = loc == '/login' ||
@@ -35,7 +50,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (!isLoggedIn && !isPublic) return '/login';
       if (isLoggedIn && loc == '/login') {
-        if (authState.user?.forcePasswordChange == true) return '/change-password';
+        if (auth.user?.forcePasswordChange == true) return '/change-password';
         return '/dashboard';
       }
       return null;

@@ -232,7 +232,7 @@ class _TaskCard extends StatelessWidget {
         border: cardBorder,
       ),
       child: InkWell(
-        onTap: restricted ? null : () => context.go('/tasks/${task.id}'),
+        onTap: () => context.go('/tasks/${task.id}'),
         borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -281,12 +281,18 @@ class _TaskCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     if (restricted)
                       Row(children: [
-                        _Badge(label: task.status.replaceAll('_', ' '), color: Colors.blueGrey),
-                        const SizedBox(width: 8),
-                        Text('• • •  Restricted', style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade400, fontStyle: FontStyle.italic)),
+                        Icon(Icons.lock_outline, size: 11, color: Colors.blueGrey.shade400),
+                        const SizedBox(width: 4),
+                        Text('Cross-dept · restricted', style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade400, fontStyle: FontStyle.italic)),
                         const Spacer(),
-                        if (task.departmentName != null)
-                          Text(task.departmentName!, style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade400)),
+                        if (task.dueDate != null) ...[
+                          Icon(Icons.flag_outlined, size: 12, color: Colors.blueGrey.shade400),
+                          const SizedBox(width: 4),
+                          Text(
+                            DateFormat('MMM dd, yyyy').format(task.dueDate!.toLocal()),
+                            style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade600, fontWeight: FontWeight.w500),
+                          ),
+                        ],
                       ])
                     else
                       Row(
@@ -329,7 +335,7 @@ class _TaskCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Icon(
-                restricted ? Icons.lock_outline : Icons.chevron_right,
+                Icons.chevron_right,
                 color: restricted ? Colors.blueGrey.shade300 : Colors.grey,
                 size: 20,
               ),

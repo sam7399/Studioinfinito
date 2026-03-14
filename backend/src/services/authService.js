@@ -163,6 +163,11 @@ class AuthService {
       throw new Error('User not found');
     }
 
+    // Superadmin with DEMO_SUPERADMIN lock — password can only be changed via backend/DB
+    if (user.emp_code === 'DEMO_SUPERADMIN') {
+      throw new Error('The superadmin password is locked and cannot be changed from the application. Contact the system owner to update it directly in the database.');
+    }
+
     // Verify current password
     const isPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
     if (!isPasswordValid) {

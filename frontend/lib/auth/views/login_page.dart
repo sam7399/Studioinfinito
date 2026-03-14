@@ -26,10 +26,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    final ok = await ref
+    // Router redirect handles navigation automatically when auth state changes.
+    await ref
         .read(authProvider.notifier)
         .login(_emailCtrl.text.trim(), _passCtrl.text);
-    if (ok && mounted) context.go('/dashboard');
   }
 
   @override
@@ -57,7 +57,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [GemColors.darkSurface, Color(0xFF0F1F0F)],
+              colors: [GemColors.darkSurface, Color(0xFF1A0518)],
             ),
           ),
           child: Column(
