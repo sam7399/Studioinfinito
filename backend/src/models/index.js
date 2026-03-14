@@ -12,9 +12,9 @@ const sequelize = new Sequelize(
     timezone: config.database.timezone,
     logging: config.database.logging,
     pool: config.database.pool || {
-      max: 5,
+      max: 3,
       min: 0,
-      acquire: 30000,
+      acquire: 60000,
       idle: 10000
     },
     define: {

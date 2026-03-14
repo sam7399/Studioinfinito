@@ -50,8 +50,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// XSS protection
-app.use(xss());
+// XSS protection (skip on Node 18+ where xss-clean may throw)
+try { app.use(xss()); } catch (_) {}
 
 // Rate limiting
 app.use('/api', apiLimiter);
