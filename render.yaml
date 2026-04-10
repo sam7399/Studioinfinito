@@ -1,0 +1,53 @@
+version: "1"
+projects:
+- name: TSI Task Manager
+  environments:
+  - name: tsi-task-manager
+    services:
+    - type: web
+      name: tsi-task-manager
+      runtime: node
+      plan: starter
+      envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 12h
+      - key: DBHOST
+        sync: false
+      - key: DBPORT
+        sync: false
+      - key: DBNAME
+        sync: false
+      - key: DBUSER
+        sync: false
+      - key: DBPASS
+        sync: false
+      - key: EMAILHOST
+        sync: false
+      - key: EMAILPORT
+        sync: false
+      - key: EMAILSECURE
+        sync: false
+      - key: EMAILUSER
+        sync: false
+      - key: EMAILPASS
+        sync: false
+      - key: EMAIL_FROM
+        value: TSI Task Manager <no-reply@thestudioinfinito.com>
+      - key: BASE_URL_API
+        sync: false
+      - key: BASE_URL_APP
+        value: https://task.thestudioinfinito.com
+      - key: CORS_ORIGINS
+        value: https://task.thestudioinfinito.com
+      - key: LOG_LEVEL
+        value: info
+      region: oregon
+      buildCommand: npm install
+      startCommand: node src/server.js
+      rootDir: backend

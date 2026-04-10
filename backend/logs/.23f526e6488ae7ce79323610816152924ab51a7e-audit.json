@@ -1,0 +1,30 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\.23f526e6488ae7ce79323610816152924ab51a7e-audit.json",
+    "files": [
+        {
+            "date": 1771751267020,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\exceptions-2026-02-22.log",
+            "hash": "784ab22a464153ac791b5a72222d463de28a01b11bcf567f282b597ba22ea24d"
+        },
+        {
+            "date": 1772368402380,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\exceptions-2026-03-01.log",
+            "hash": "db81bdcffd1df02e007878f4f7bf5f379b681475df299e8b6e71289e2d893384"
+        },
+        {
+            "date": 1772390030546,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\exceptions-2026-03-02.log",
+            "hash": "8bfd165d64232020aeebc7363b633545303b6fb12c5b513abc8ef2ec11f307e4"
+        },
+        {
+            "date": 1772499450689,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\exceptions-2026-03-03.log",
+            "hash": "fa2130f1503f4b02cdb59bde2e76dfd9bf0e2e3ec68e98ba6cf17d51b7630ec6"
+        }
+    ],
+    "hashType": "sha256"
+}

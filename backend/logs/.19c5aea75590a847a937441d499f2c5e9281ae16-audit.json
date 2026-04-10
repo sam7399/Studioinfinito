@@ -1,0 +1,30 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\.19c5aea75590a847a937441d499f2c5e9281ae16-audit.json",
+    "files": [
+        {
+            "date": 1771751267006,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\error-2026-02-22.log",
+            "hash": "daeafea1e3cc539fb56eb21153ecf5137a536dd0db9e197719e66aef3426539f"
+        },
+        {
+            "date": 1772368402372,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\error-2026-03-01.log",
+            "hash": "369d710a5c5ffb640777e2289803a8078f7c295065f4e90ec4d4529eedb96965"
+        },
+        {
+            "date": 1772390030530,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\error-2026-03-02.log",
+            "hash": "10d753a69985e9335083d85431d0d1b803b10338a917db814352776a9d341f0e"
+        },
+        {
+            "date": 1772499450681,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\error-2026-03-03.log",
+            "hash": "4a28436440800713ae1590ff444ec4cdcfe1127565c0d6ae00bddf57c3abdab5"
+        }
+    ],
+    "hashType": "sha256"
+}

@@ -1,0 +1,35 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\.ed4bdc6c10042adcab560e306c294331368c2e77-audit.json",
+    "files": [
+        {
+            "date": 1771751267012,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\combined-2026-02-22.log",
+            "hash": "debe0f52dd47d98d9b0b9da368fede68236553b42b130b11d0ab716b22e865a4"
+        },
+        {
+            "date": 1772368402376,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\combined-2026-03-01.log",
+            "hash": "3940a365d44e6f6716d31f8b0cdf67301aa6ca00e1987c00cd0732b749f6ce4a"
+        },
+        {
+            "date": 1772389800815,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\combined-2026-03-02.log",
+            "hash": "3a141fa23d34c2039a9e1541a17227903f6680e0c3fefd34f109ada2ea874b42"
+        },
+        {
+            "date": 1772476200490,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\combined-2026-03-03.log",
+            "hash": "cf1ddd43eeb15748cca49174c4fe8ccfeb476e6c3600af261070fdb896da4242"
+        },
+        {
+            "date": 1772562600123,
+            "name": "C:\\Users\\JSK\\Desktop\\apps\\backend\\logs\\combined-2026-03-04.log",
+            "hash": "91ba77354afd4ea764e62ae3277b9d39a4f40d36990a958be6f0127b4d2babf2"
+        }
+    ],
+    "hashType": "sha256"
+}

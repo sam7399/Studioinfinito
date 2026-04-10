@@ -1,0 +1,252 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║           RENDER.COM DEPLOYMENT - ENVIRONMENT VARIABLES CHECKLIST           ║
+║                                                                             ║
+║  Copy-paste these variables into your Render backend service                ║
+║  Settings > Environment Variables                                           ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 STEP 1: GET VALUES FROM YOUR SERVICES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🗄️ FROM RAILWAY DATABASE:
+
+  1. Go to: https://railway.app/dashboard
+  2. Click on your project (Studio Infinito)
+  3. Click the MySQL service
+  4. Click the "DATA" or "CONNECT" tab
+  5. You'll see connection details:
+
+     DBHOST (Host)........: [copy this]
+     DBPORT (Port)........: [usually 3306]
+     DBNAME (Database)....: [usually studio_infinito or railway]
+     DBUSER (User)........: [copy this]
+     DBPASS (Password)....: [copy this - it's shown only once!]
+
+🔗 YOUR DOMAINS:
+
+  - Render Backend URL: https://studioinfinito-api.onrender.com
+                        (This is your Render backend URL)
+  
+  - Frontend URL:       https://task.thestudioinfinito.com
+                        (This is your Hostinger frontend URL)
+
+🔐 JWT SECRET (Generate Random):
+
+  Open terminal and run:
+    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  
+  This will output something like:
+    a3f8e9c1b2d4f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0
+  
+  (Use this as JWT_SECRET)
+
+✉️ GMAIL SETUP:
+
+  1. Go to: https://myaccount.google.com/apppasswords
+  2. Select "Mail" and "Windows Computer" (or your device)
+  3. Google will generate a 16-character password
+  4. Use this as EMAILPASS (not your regular Gmail password!)
+  5. Your email is your Gmail address (e.g., yourname@gmail.com)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 STEP 2: ADD THESE VARIABLES IN RENDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Go to: Render Dashboard > Your Backend Service > Environment
+
+Copy-paste each pair below:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ ENVIRONMENT VARIABLES (Copy-Paste Format)                       │
+└─────────────────────────────────────────────────────────────────┘
+
+── DATABASE VARIABLES ──
+KEY: DBHOST
+VALUE: [copy from Railway Data tab]
+
+KEY: DBPORT
+VALUE: 3306
+
+KEY: DBNAME
+VALUE: [copy from Railway Data tab or use 'studio_infinito']
+
+KEY: DBUSER
+VALUE: [copy from Railway Data tab]
+
+KEY: DBPASS
+VALUE: [copy from Railway Data tab - be careful with special characters!]
+
+── JWT VARIABLES ──
+KEY: JWT_SECRET
+VALUE: [paste your generated random string from above]
+
+KEY: JWT_EXPIRES_IN
+VALUE: 7d
+
+── EMAIL VARIABLES ──
+KEY: EMAILHOST
+VALUE: smtp.gmail.com
+
+KEY: EMAILPORT
+VALUE: 587
+
+KEY: EMAILUSER
+VALUE: [your Gmail address, e.g., name@gmail.com]
+
+KEY: EMAILPASS
+VALUE: [your Gmail app-specific password from above]
+
+── APPLICATION URLs ──
+KEY: BASE_URL_API
+VALUE: https://studioinfinito-api.onrender.com
+
+KEY: BASE_URL_APP
+VALUE: https://task.thestudioinfinito.com
+
+── CORS ORIGINS ──
+KEY: CORS_ORIGINS
+VALUE: https://task.thestudioinfinito.com,http://localhost:3000,http://localhost:5173
+(This allows your frontend + dev environments to connect)
+
+── ENVIRONMENT MODE ──
+KEY: NODE_ENV
+VALUE: production
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 STEP 3: VERIFICATION CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After you add all variables:
+
+☐ All 14 variables are in Render (check the count)
+☐ DBHOST is not empty
+☐ DBUSER is not empty
+☐ DBPASS is not empty
+☐ JWT_SECRET is a long random string
+☐ EMAILUSER has your Gmail address
+☐ EMAILPASS is your app-specific password (16 chars)
+☐ BASE_URL_API matches your Render URL
+☐ BASE_URL_APP matches your Hostinger URL
+☐ NODE_ENV is set to 'production'
+
+Then:
+☐ Click "Save" in Render
+☐ Click "Manual Deploy" to apply changes
+☐ Wait for deployment to complete (watch Deployments tab)
+☐ Check logs for errors (Deployments > Logs)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧪 STEP 4: TEST YOUR DEPLOYMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Open terminal and test:
+
+# Test 1: Backend is responding
+curl https://studioinfinito-api.onrender.com/api/v1/health
+
+✅ Success response:
+  {"status":"ok"}
+
+❌ If it fails:
+  - Check that deployment status is "Live" in Render
+  - Check logs for database connection errors
+  - Verify DBHOST, DBUSER, DBPASS are correct
+
+
+# Test 2: Can you login?
+curl -X POST https://studioinfinito-api.onrender.com/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "demoadmin",
+    "password": "TSI@Demo#2025"
+  }'
+
+✅ Success response:
+  {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": 1,
+      "name": "Demo Admin",
+      "email": "admin@demo.tsi"
+    }
+  }
+
+❌ If it fails:
+  - Check JWT_SECRET is set
+  - Check CORS_ORIGINS includes localhost (for testing)
+  - Check database has demo users (run seed)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. DBPASS SPECIAL CHARACTERS
+   If your database password has special characters (@, !, $, %, etc.),
+   Render might need them escaped. If login fails after adding password:
+   - Try URL-encoding the password
+   - Or change the password to something simpler in Railway
+
+2. JWT_SECRET SECURITY
+   Never commit this to Git!
+   Never share it with others!
+   If someone learns it, they can forge login tokens.
+
+3. EMAILPASS
+   This is NOT your regular Gmail password.
+   Get it from: https://myaccount.google.com/apppasswords
+   Regular Gmail password won't work with SMTP.
+
+4. CORS_ORIGINS
+   Make sure to include:
+   - Your Hostinger frontend URL (https://task.thestudioinfinito.com)
+   - Dev URLs (http://localhost:3000, http://localhost:5173)
+   - Separate multiple URLs with commas, no spaces
+
+5. REDEPLOY AFTER CHANGES
+   After adding/changing environment variables, always:
+   1. Click "Save"
+   2. Click "Manual Deploy"
+   3. Wait for deployment to complete
+   4. Check logs for errors
+
+6. MONITORING
+   After deployment:
+   - Watch the Logs tab for the first minute
+   - Look for "Server running on port 5000"
+   - Look for "Database connected"
+   - If you see red errors, fix them immediately
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 QUICK REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Render URL:           https://render.com/dashboard
+Railway URL:          https://railway.app/dashboard
+Backend Service:      https://studioinfinito-api.onrender.com
+Frontend URL:         https://task.thestudioinfinito.com
+Demo Admin:           demoadmin / TSI@Demo#2025
+Demo Manager:         priyasharma / Demo@1234
+
+Total Variables:      14
+Required Variables:   All 14
+Optional Variables:   None
+
+After Changes:        Always "Save" + "Manual Deploy"
+Deployment Time:      2-5 minutes
+Check Logs:           Deployments > Logs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ YOU'RE DONE!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Your backend is now deployed on Render with all environment variables set.
+
+Next steps:
+1. Deploy frontend to Hostinger (see COMPLETE_DEPLOYMENT_BEGINNER_GUIDE.md Section 3)
+2. Run database migrations on Railway (see Section 4)
+3. Test everything works (see Section 5)
+
+For help: Check the troubleshooting section in COMPLETE_DEPLOYMENT_BEGINNER_GUIDE.md
+
+Last updated: March 2026
