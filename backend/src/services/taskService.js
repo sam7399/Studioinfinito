@@ -311,6 +311,17 @@ class TaskService {
     delete taskData.depends_on_task_id;
 
     // Build create payload — only include known model fields to avoid Sequelize warnings
+    // Format due_date to YYYY-MM-DD for MySQL DATEONLY
+    let dueDate = null;
+    if (taskData.due_date) {
+      try {
+        const d = new Date(taskData.due_date);
+        dueDate = d.toISOString().split('T')[0];
+      } catch {
+        dueDate = taskData.due_date;
+      }
+    }
+
     const createPayload = {
       title: taskData.title,
       description: taskData.description || null,
@@ -321,7 +332,7 @@ class TaskService {
       company_id: taskData.company_id,
       department_id: taskData.department_id,
       location_id: taskData.location_id,
-      due_date: taskData.due_date || null,
+      due_date: dueDate,
       estimated_hours: taskData.estimated_hours || null,
       show_collaborators: taskData.show_collaborators !== false
     };
@@ -410,6 +421,16 @@ class TaskService {
     // Track changes for activity log
     const changes = [];
     const oldValues = { ...task.dataValues };
+
+    // Format due_date if provided
+    if (updates.due_date) {
+      try {
+        const d = new Date(updates.due_date);
+        updates.due_date = d.toISOString().split('T')[0];
+      } catch {
+        // Keep original if parsing fails
+      }
+    }
 
     // Update task
     let oldAssigneeId = task.assigned_to_user_id;
