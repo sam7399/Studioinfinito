@@ -50,18 +50,22 @@ class RBACService {
 
   /**
    * Get task visibility scope for user.
-   * All roles see all tasks in their company (cross-dept privacy masking applied after fetch).
-   * If no company_id, fall back to own tasks only.
+   * - Superadmin: all tasks
+   * - Management/Department Head/Manager: all tasks in their company
+   * - Employee: only tasks assigned to or created by them
+   * Cross-dept privacy masking applied after fetch.
    */
   static async getTaskVisibilityScope(user) {
     if (user.role === 'superadmin') return {};
 
-    // Users with a company see all tasks in that company
-    if (user.company_id) {
-      return { company_id: user.company_id };
+    // Management, department_head, and manager see all tasks in their company
+    if (['management', 'department_head', 'manager'].includes(user.role)) {
+      if (user.company_id) {
+        return { company_id: user.company_id };
+      }
     }
 
-    // No company assigned — only own tasks
+    // Employee: only own tasks (assigned to or created by)
     return {
       [Op.or]: [
         { created_by_user_id: user.id },

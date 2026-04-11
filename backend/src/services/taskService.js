@@ -69,9 +69,8 @@ function applyPrivacy(task, viewer) {
  */
 function buildCollaboratorView(task, viewerUserId) {
   const t = task.toJSON ? task.toJSON() : { ...task };
-  if (!t.show_collaborators) {
-    // Only show the viewer themselves
-    t.collaborators = (t.collaborators || []).filter(c => c.id === viewerUserId);
+  if (t.collaborators && !t.show_collaborators) {
+    t.collaborators = t.collaborators.filter(c => c.id === viewerUserId);
   }
   return t;
 }

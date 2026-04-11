@@ -105,9 +105,22 @@ class TaskNotifier extends Notifier<TaskListState> {
         },
       );
 
-      final List data = response.data['data']['tasks'];
-      final tasks = data.map((j) => TaskModel.fromJson(j)).toList();
-      final pagination = response.data['data']['pagination'] as Map<String, dynamic>? ?? {};
+      final dynamic body = response.data;
+      if (body is! Map) throw Exception('Unexpected response: $body');
+      final dynamic inner = body['data'];
+      if (inner is! Map) throw Exception('Missing data field: $body');
+      final List data = (inner['tasks'] as List?) ?? [];
+      final tasks = data
+          .map((j) {
+            try {
+              return TaskModel.fromJson(j as Map<String, dynamic>);
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<TaskModel>()
+          .toList();
+      final pagination = (inner['pagination'] as Map<String, dynamic>?) ?? {};
       final total = (pagination['total'] as num?)?.toInt() ?? 0;
       final allTasks = reset ? tasks : [...state.tasks, ...tasks];
 
@@ -122,10 +135,10 @@ class TaskNotifier extends Notifier<TaskListState> {
         isLoading: false,
         error: e.response?.data?['message'] ?? 'Failed to load tasks',
       );
-    } catch (e) {
+    } catch (_) {
       state = state.copyWith(
         isLoading: false,
-        error: 'Unexpected error. Please retry.',
+        error: 'Failed to load tasks. Please retry.',
       );
     }
   }

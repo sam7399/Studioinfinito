@@ -54,40 +54,65 @@ class TaskModel {
       dueDate!.isBefore(DateTime.now()) &&
       status != 'finalized';
 
+  static DateTime? _parseDate(dynamic v) {
+    if (v == null) return null;
+    try { return DateTime.parse(v.toString()); } catch (_) { return null; }
+  }
+
+  static int _parseInt(dynamic v, [int fallback = 0]) {
+    if (v == null) return fallback;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? fallback;
+  }
+
+  static String? _str(dynamic v) => v?.toString();
+
   factory TaskModel.fromJson(Map<String, dynamic> json) {
-    final collabs = (json['collaborators'] as List<dynamic>? ?? [])
-        .map((c) => (c as Map<String, dynamic>?)?['name'] as String? ?? '')
-        .where((n) => n.isNotEmpty)
-        .toList();
+    List<String> collabs = [];
+    try {
+      collabs = (json['collaborators'] as List<dynamic>? ?? [])
+          .map((c) => (c is Map ? c['name']?.toString() : null) ?? '')
+          .where((n) => n.isNotEmpty)
+          .toList();
+    } catch (_) {}
+
+    List<String> tags = [];
+    try {
+      final rawTags = json['tags'];
+      if (rawTags is List) {
+        tags = rawTags.map((t) => t?.toString() ?? '').where((t) => t.isNotEmpty).toList();
+      }
+    } catch (_) {}
+
+    String? _nestedName(dynamic v) {
+      try { return (v as Map?)?['name']?.toString(); } catch (_) { return null; }
+    }
 
     return TaskModel(
-      id: json['id'],
-      title: json['title'] ?? '',
-      description: json['description'],
-      priority: json['priority'] ?? 'normal',
-      status: json['status'] ?? 'open',
-      assignedTo: json['assigned_to_user_id'] ?? json['assigned_to'] ?? 0,
-      assignedToName:
-          (json['assignee'] as Map<String, dynamic>?)?['name'] as String?,
-      createdBy: json['created_by_user_id'] ?? json['created_by'] ?? 0,
-      createdByName:
-          (json['creator'] as Map<String, dynamic>?)?['name'] as String?,
-      departmentId: json['department_id'] ?? 0,
-      departmentName:
-          (json['department'] as Map<String, dynamic>?)?['name'] as String?,
-      locationId: json['location_id'] ?? 0,
-      locationName:
-          (json['location'] as Map<String, dynamic>?)?['name'] as String?,
-      companyId: json['company_id'],
-      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
+      id: _parseInt(json['id']),
+      title: _str(json['title']) ?? '',
+      description: _str(json['description']),
+      priority: _str(json['priority']) ?? 'normal',
+      status: _str(json['status']) ?? 'open',
+      assignedTo: _parseInt(json['assigned_to_user_id'] ?? json['assigned_to']),
+      assignedToName: _nestedName(json['assignee']),
+      createdBy: _parseInt(json['created_by_user_id'] ?? json['created_by']),
+      createdByName: _nestedName(json['creator']),
+      departmentId: _parseInt(json['department_id']),
+      departmentName: _nestedName(json['department']),
+      locationId: _parseInt(json['location_id']),
+      locationName: _nestedName(json['location']),
+      companyId: json['company_id'] != null ? _parseInt(json['company_id']) : null,
+      dueDate: _parseDate(json['due_date']),
       estimatedHours: (json['estimated_hours'] as num?)?.toDouble(),
-      progressPercent: (json['progress_percent'] as num?)?.toInt() ?? 0,
-      tags: List<String>.from(json['tags'] ?? []),
+      progressPercent: _parseInt(json['progress_percent']),
+      tags: tags,
       collaboratorNames: collabs,
-      escalationLevel: (json['escalation_level'] as num?)?.toInt() ?? 0,
+      escalationLevel: _parseInt(json['escalation_level']),
       isRestricted: json['_restricted'] == true,
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
+      updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );
   }
 }

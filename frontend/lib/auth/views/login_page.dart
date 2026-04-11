@@ -86,7 +86,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   fontSize: 13,
                 ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
               // Feature bullets
               ...[
                 (Icons.assignment_turned_in_outlined,
@@ -111,6 +111,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ],
                     ),
                   )),
+              const SizedBox(height: 32),
+              Text(
+                'Designed by Personifycrafters',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.25),
+                  fontSize: 11,
+                  letterSpacing: 0.3,
+                ),
+              ),
             ],
           ),
         ),
@@ -267,6 +276,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             child: TextButton(
               onPressed: () => context.go('/forgot-password'),
               child: const Text('Forgot password?'),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              'Designed by Personifycrafters',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade400,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
         ],

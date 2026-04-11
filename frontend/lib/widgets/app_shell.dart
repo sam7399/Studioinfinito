@@ -258,13 +258,24 @@ class _SideNav extends ConsumerWidget {
 
             // ── Bottom: version + logout ───────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 2),
               child: Text(
                 user?.companyName ?? 'The Studio Infinito',
                 style: TextStyle(
                     fontSize: 10,
                     color: Colors.white.withOpacity(0.3),
                     letterSpacing: 0.4),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Text(
+                'Designed by Personifycrafters',
+                style: TextStyle(
+                    fontSize: 9,
+                    color: Colors.white.withOpacity(0.18),
+                    letterSpacing: 0.3),
                 textAlign: TextAlign.center,
               ),
             ),
