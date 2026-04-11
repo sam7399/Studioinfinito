@@ -89,7 +89,8 @@ class TaskNotifier extends Notifier<TaskListState> {
     });
   }
 
-  Future<void> fetchTasks({Map<String, dynamic>? filters, bool reset = false}) async {
+  Future<void> fetchTasks(
+      {Map<String, dynamic>? filters, bool reset = false}) async {
     if (state.isLoading) return;
 
     final page = reset ? 1 : state.page;
@@ -133,12 +134,13 @@ class TaskNotifier extends Notifier<TaskListState> {
     } on DioException catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.response?.data?['message'] ?? 'Failed to load tasks',
+        error: e.response?.data?['message'] ??
+            'Failed to load tasks: ${e.message}',
       );
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'Failed to load tasks. Please retry.',
+        error: 'Failed to load tasks: $e',
       );
     }
   }
@@ -163,7 +165,8 @@ class TaskNotifier extends Notifier<TaskListState> {
       String msg;
       if (e.response?.data != null) {
         // Server returned a response — use its message
-        msg = e.response!.data['message'] as String? ?? 'Server error (${e.response!.statusCode})';
+        msg = e.response!.data['message'] as String? ??
+            'Server error (${e.response!.statusCode})';
         // If validation errors array is present, append first detail
         final errors = e.response!.data['errors'];
         if (errors is List && errors.isNotEmpty) {
@@ -171,8 +174,8 @@ class TaskNotifier extends Notifier<TaskListState> {
           if (detail.isNotEmpty) msg = '$msg: $detail';
         }
       } else if (e.type == DioExceptionType.connectionTimeout ||
-                 e.type == DioExceptionType.sendTimeout ||
-                 e.type == DioExceptionType.receiveTimeout) {
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
         msg = 'Request timed out. Check your connection and try again.';
       } else if (e.type == DioExceptionType.connectionError) {
         msg = 'Cannot reach server. Check your internet connection.';
@@ -235,10 +238,12 @@ class TaskNotifier extends Notifier<TaskListState> {
     }
   }
 
-  Future<bool> uploadAttachment(int taskId, Uint8List bytes, String filename, String mimeType) async {
+  Future<bool> uploadAttachment(
+      int taskId, Uint8List bytes, String filename, String mimeType) async {
     try {
       final formData = FormData.fromMap({
-        'file': MultipartFile.fromBytes(bytes, filename: filename, contentType: DioMediaType.parse(mimeType)),
+        'file': MultipartFile.fromBytes(bytes,
+            filename: filename, contentType: DioMediaType.parse(mimeType)),
       });
       await _dio.post(ApiConstants.taskAttachments(taskId), data: formData);
       return true;
@@ -258,7 +263,8 @@ class TaskNotifier extends Notifier<TaskListState> {
 
   Future<bool> deleteAttachment(int taskId, int attachmentId) async {
     try {
-      await _dio.delete(ApiConstants.taskAttachmentDelete(taskId, attachmentId));
+      await _dio
+          .delete(ApiConstants.taskAttachmentDelete(taskId, attachmentId));
       return true;
     } on DioException {
       return false;
@@ -266,4 +272,5 @@ class TaskNotifier extends Notifier<TaskListState> {
   }
 }
 
-final taskProvider = NotifierProvider<TaskNotifier, TaskListState>(TaskNotifier.new);
+final taskProvider =
+    NotifierProvider<TaskNotifier, TaskListState>(TaskNotifier.new);

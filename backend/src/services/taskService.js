@@ -100,6 +100,8 @@ class TaskService {
 
     // Build where clause based on RBAC
     const visibilityScope = await RBACService.getTaskVisibilityScope(user);
+    logger.info('[listTasks] user:', { id: user.id, role: user.role, company_id: user.company_id });
+    logger.info('[listTasks] visibilityScope:', JSON.stringify(visibilityScope));
     const where = { ...visibilityScope };
 
     // Apply filters
@@ -131,8 +133,8 @@ class TaskService {
       order: [[sort_by, sort_order.toUpperCase()]],
       limit: parseInt(limit),
       offset: parseInt(offset),
-      distinct: true
     }));
+    logger.info('[listTasks] query result:', { count, taskCount: tasks.length });
 
     // Apply privacy masking and collaborator visibility
     const processedTasks = tasks.map(t => {
