@@ -21,10 +21,15 @@ frontend/data files/
 node_modules/
 backend/node_modules/
 
+# Python venv
+venv/
+.venv/
+
 # Environment secrets
 .env
 backend/.env
 backend/.env.test
+frontend/.env
 
 # OS files
 .DS_Store
@@ -33,3 +38,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.aider*
+
+# Debug artifacts
+error.png

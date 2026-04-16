@@ -36,6 +36,13 @@ const TASK_INCLUDES = [
   }
 ];
 
+function formatDateOnly(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().split('T')[0];
+}
+
 /**
  * Apply cross-department privacy: viewer outside the task's dept sees the title (header)
  * but all sensitive details are masked — description, assignee, creator are hidden.
@@ -100,17 +107,7 @@ class TaskService {
 
     // Build where clause based on RBAC
     const visibilityScope = await RBACService.getTaskVisibilityScope(user);
-    logger.info('[listTasks] user:', { id: user.id, role: user.role, company_id: user.company_id });
-    logger.info('[listTasks] visibilityScope:', JSON.stringify(visibilityScope));
     const where = { ...visibilityScope };
-    
-    // Debug: check if tasks exist at all
-    const totalCount = await Task.count();
-    logger.info('[listTasks] total tasks in DB:', totalCount);
-    
-    // Debug: check tasks matching visibility scope
-    const visibleCount = await Task.count({ where });
-    logger.info('[listTasks] tasks matching visibility:', visibleCount);
 
     // Apply filters
     if (status) where.status = status;
@@ -135,19 +132,14 @@ class TaskService {
 
     // Use lightweight includes for the list — no many-to-many/nested joins
     let count, tasks;
-    try {
-      ({ count, rows: tasks } = await Task.findAndCountAll({
-        where,
-        include: TASK_LIST_INCLUDES,
-        order: [[sort_by, sort_order.toUpperCase()]],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-      }));
-      logger.info('[listTasks] query success:', { count, taskCount: tasks.length });
-    } catch (err) {
-      logger.error('[listTasks] query error:', err.message, err.stack);
-      throw err;
-    }
+    ({ count, rows: tasks } = await Task.findAndCountAll({
+      where,
+      include: TASK_LIST_INCLUDES,
+      order: [[sort_by, sort_order.toUpperCase()]],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true
+    }));
 
     // Apply privacy masking and collaborator visibility
     const processedTasks = tasks.map(t => {
@@ -310,18 +302,6 @@ class TaskService {
     const dependsOnId = taskData.depends_on_task_id || null;
     delete taskData.depends_on_task_id;
 
-    // Build create payload — only include known model fields to avoid Sequelize warnings
-    // Format due_date to YYYY-MM-DD for MySQL DATEONLY
-    let dueDate = null;
-    if (taskData.due_date) {
-      try {
-        const d = new Date(taskData.due_date);
-        dueDate = d.toISOString().split('T')[0];
-      } catch {
-        dueDate = taskData.due_date;
-      }
-    }
-
     const createPayload = {
       title: taskData.title,
       description: taskData.description || null,
@@ -332,7 +312,7 @@ class TaskService {
       company_id: taskData.company_id,
       department_id: taskData.department_id,
       location_id: taskData.location_id,
-      due_date: dueDate,
+      due_date: formatDateOnly(taskData.due_date),
       estimated_hours: taskData.estimated_hours || null,
       show_collaborators: taskData.show_collaborators !== false
     };
@@ -422,14 +402,8 @@ class TaskService {
     const changes = [];
     const oldValues = { ...task.dataValues };
 
-    // Format due_date if provided
     if (updates.due_date) {
-      try {
-        const d = new Date(updates.due_date);
-        updates.due_date = d.toISOString().split('T')[0];
-      } catch {
-        // Keep original if parsing fails
-      }
+      updates.due_date = formatDateOnly(updates.due_date) ?? updates.due_date;
     }
 
     // Update task
