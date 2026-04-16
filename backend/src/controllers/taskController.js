@@ -246,40 +246,6 @@ class TaskController {
     }
   }
 
-  static async reviewTask(req, res, next) {
-    try {
-      const task = await TaskService.reviewTask(req.params.id, req.body, req.user);
-      
-      logger.info(`Task reviewed: ${req.params.id} by user ${req.user.id} - ${req.body.status}`);
-      
-      res.json({
-        success: true,
-        data: task
-      });
-    } catch (error) {
-      logger.error('Review task error:', error);
-      if (error.message === 'Task not found') {
-        return res.status(404).json({
-          success: false,
-          message: error.message
-        });
-      }
-      if (error.message.includes('Permission denied')) {
-        return res.status(403).json({
-          success: false,
-          message: error.message
-        });
-      }
-      if (error.message.includes('not pending review')) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-      next(error);
-    }
-  }
-
   static async getTaskActivities(req, res, next) {
     try {
       const activities = await TaskService.getTaskActivities(req.params.id, req.user);

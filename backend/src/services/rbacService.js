@@ -131,16 +131,20 @@ class RBACService {
    * Check if user can review task
    */
   static async canReviewTask(user, task) {
-    // Task creator or their manager can review
+    // Superadmin can review anything
+    if (user.role === 'superadmin') return true;
+
+    // Task creator can review
     if (task.created_by_user_id === user.id) return true;
 
     // Check if user is manager of the task creator
     const creator = await User.findByPk(task.created_by_user_id);
     if (creator && creator.manager_id === user.id) return true;
 
-    // Management and department heads can review tasks in their scope
+    // Role-based scope review
     if (user.role === 'management' && task.company_id === user.company_id) return true;
     if (user.role === 'department_head' && task.department_id === user.department_id) return true;
+    if (user.role === 'manager' && task.department_id === user.department_id) return true;
 
     return false;
   }

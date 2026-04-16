@@ -223,7 +223,9 @@ class TaskNotifier extends Notifier<TaskListState> {
       await _dio.post(ApiConstants.taskReview(id), data: data);
       await fetchTasks(reset: true);
       return true;
-    } on DioException {
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Review failed';
+      state = state.copyWith(error: msg.toString());
       return false;
     }
   }

@@ -67,70 +67,155 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     }
   }
 
-  void _showReviewDialog() {
-    String reviewStatus = 'approved';
+  void _showReviewDialog({required bool isTaskCreator}) {
+    String reviewMode = 'approved';
+    int selectedRating = 4;
     final commentCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
           title: const Text('Review Task'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Decision',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 8),
-              Row(
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: _ReviewOption(
-                      label: 'Approve',
-                      icon: Icons.check_circle_outline,
-                      color: Colors.green,
-                      selected: reviewStatus == 'approved',
-                      onTap: () => setS(() => reviewStatus = 'approved'),
-                    ),
+                  const Text('Decision',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ReviewOption(
+                          label: 'Approve',
+                          icon: Icons.check_circle_outline,
+                          color: Colors.green,
+                          selected: reviewMode == 'approved',
+                          onTap: () => setS(() => reviewMode = 'approved'),
+                        ),
+                      ),
+                      if (isTaskCreator) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _ReviewOption(
+                            label: 'Reopen',
+                            icon: Icons.refresh,
+                            color: Colors.orange,
+                            selected: reviewMode == 'reopen',
+                            onTap: () => setS(() => reviewMode = 'reopen'),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ReviewOption(
-                      label: 'Reopen',
-                      icon: Icons.refresh,
-                      color: Colors.orange,
-                      selected: reviewStatus == 'reopened',
-                      onTap: () => setS(() => reviewStatus = 'reopened'),
+                  if (reviewMode == 'approved') ...[
+                    const SizedBox(height: 16),
+                    const Text('Rating',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (i) {
+                        final star = i + 1;
+                        return GestureDetector(
+                          onTap: () => setS(() => selectedRating = star),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              star <= selectedRating ? Icons.star : Icons.star_border,
+                              color: Colors.amber,
+                              size: 32,
+                            ),
+                          ),
+                        );
+                      }),
                     ),
+                  ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: commentCtrl,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: reviewMode == 'reopen'
+                          ? 'Reason for reopening *'
+                          : 'Comment (optional)',
+                      hintText: reviewMode == 'reopen'
+                          ? 'e.g. Incomplete work, requirements changed...'
+                          : null,
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: reviewMode == 'reopen'
+                        ? (v) => (v == null || v.trim().isEmpty)
+                            ? 'A reason is required when reopening'
+                            : null
+                        : null,
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: commentCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                    labelText: 'Comment (optional)',
-                    border: OutlineInputBorder()),
-              ),
-            ],
+            ),
           ),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancel')),
             FilledButton(
+              style: reviewMode == 'reopen'
+                  ? FilledButton.styleFrom(backgroundColor: Colors.orange)
+                  : null,
               onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
                 Navigator.pop(ctx);
                 setState(() => _actionsLoading = true);
-                await ref.read(taskProvider.notifier).submitReview(
-                    widget.taskId, {
-                  'status': reviewStatus,
-                  if (commentCtrl.text.isNotEmpty) 'comment': commentCtrl.text,
-                });
-                if (mounted) await _load();
+                if (reviewMode == 'reopen') {
+                  final ok = await ref
+                      .read(taskProvider.notifier)
+                      .reopenTask(widget.taskId, commentCtrl.text.trim());
+                  if (mounted) {
+                    if (ok) {
+                      await _load();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Task reopened')));
+                      }
+                    } else {
+                      setState(() => _actionsLoading = false);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Failed to reopen task'),
+                            backgroundColor: Colors.red));
+                      }
+                    }
+                  }
+                } else {
+                  final ok = await ref.read(taskProvider.notifier).submitReview(
+                      widget.taskId, {
+                    'rating': selectedRating,
+                    if (commentCtrl.text.isNotEmpty) 'comments': commentCtrl.text.trim(),
+                  });
+                  if (mounted) {
+                    if (ok) {
+                      await _load();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Task approved and finalized')));
+                      }
+                    } else {
+                      setState(() => _actionsLoading = false);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Failed to submit review'),
+                            backgroundColor: Colors.red));
+                      }
+                    }
+                  }
+                }
               },
-              child: const Text('Submit'),
+              child: Text(reviewMode == 'reopen' ? 'Reopen' : 'Approve & Finalize'),
             ),
           ],
         ),
@@ -248,6 +333,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     final currentUserId = authState.user?.id;
     final isManagement =
         userRole == 'superadmin' || userRole == 'management';
+    final canReview = isManagement ||
+        userRole == 'department_head' ||
+        userRole == 'manager';
 
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     if (_error != null) {
@@ -509,9 +597,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
               _ActionButtons(
                 task: task,
                 isManagement: isManagement,
+                canReview: canReview,
                 isTaskCreator: currentUserId != null && task.createdBy == currentUserId,
                 onChangeStatus: _changeStatus,
-                onReview: _showReviewDialog,
+                onReview: () => _showReviewDialog(
+                    isTaskCreator: currentUserId != null && task.createdBy == currentUserId),
                 onReopen: _showReopenDialog,
               ),
 
@@ -536,6 +626,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 class _ActionButtons extends StatelessWidget {
   final TaskModel task;
   final bool isManagement;
+  final bool canReview;
   final bool isTaskCreator;
   final void Function(String) onChangeStatus;
   final VoidCallback onReview;
@@ -543,6 +634,7 @@ class _ActionButtons extends StatelessWidget {
   const _ActionButtons(
       {required this.task,
       required this.isManagement,
+      required this.canReview,
       required this.isTaskCreator,
       required this.onChangeStatus,
       required this.onReview,
@@ -571,7 +663,7 @@ class _ActionButtons extends StatelessWidget {
           onPressed: () => onChangeStatus('complete_pending_review'),
         ));
       case 'complete_pending_review':
-        if (isManagement) {
+        if (canReview) {
           buttons.add(FilledButton.icon(
             icon: const Icon(Icons.star_outline, size: 18),
             label: const Text('Review Task'),
@@ -580,24 +672,21 @@ class _ActionButtons extends StatelessWidget {
             onPressed: onReview,
           ));
         }
-        // Task creator can reopen completed tasks
-        if (isTaskCreator) {
+        // Task creator can reopen (if not already showing Review button with reopen inside)
+        if (isTaskCreator && !canReview) {
           buttons.add(FilledButton.icon(
             icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Reopen Task'),
-            style: FilledButton.styleFrom(
-                backgroundColor: Colors.orange),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: onReopen,
           ));
         }
       case 'finalized':
-        // Task creator can reopen finalized tasks
         if (isTaskCreator) {
           buttons.add(FilledButton.icon(
             icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Reopen Task'),
-            style: FilledButton.styleFrom(
-                backgroundColor: Colors.orange),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: onReopen,
           ));
         }
