@@ -176,6 +176,13 @@ class TaskNotifier extends Notifier<TaskListState> {
   // ── Core fetch ──────────────────────────────────────────────────────────────
 
   Future<void> _fetchTab({required int tab, bool reset = false}) async {
+    // Guard: skip fetch if tab requires user context and userId is unavailable
+    if ((tab == 0 || tab == 1) && _currentUserId == null) {
+      final tabData = _tabData(tab);
+      _setTabData(tab, tabData.copyWith(error: 'User context unavailable', isLoading: false));
+      return;
+    }
+
     final tabData = _tabData(tab);
     if (tabData.isLoading) return;
 
@@ -252,12 +259,12 @@ class TaskNotifier extends Notifier<TaskListState> {
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  void setTab(int tab) {
+  Future<void> setTab(int tab) async {
     if (tab == state.activeTab) return;
     state = state.copyWith(activeTab: tab);
     final td = _tabData(tab);
     if (!td.initialized || td.stale) {
-      _fetchTab(tab: tab, reset: true);
+      await _fetchTab(tab: tab, reset: true);
     }
   }
 
@@ -424,9 +431,16 @@ class TaskNotifier extends Notifier<TaskListState> {
     } on DioException catch (e) {
       final msg =
           e.response?.data?['message'] ?? e.message ?? 'Review failed';
-      state = state.copyWith(
-        assignedToMe: state.assignedToMe.copyWith(error: msg.toString()),
-      );
+      final activeTab = state.activeTab;
+      if (activeTab == 0) {
+        state = state.copyWith(
+          assignedToMe: state.assignedToMe.copyWith(error: msg.toString()),
+        );
+      } else if (activeTab == 1) {
+        state = state.copyWith(
+          assignedByMe: state.assignedByMe.copyWith(error: msg.toString()),
+        );
+      }
       return false;
     }
   }

@@ -112,8 +112,18 @@ class TaskService {
 
     if (status) where.status = status;
     if (priority) where.priority = priority;
-    if (assigned_to) where.assigned_to_user_id = parseInt(assigned_to, 10);
-    if (created_by) where.created_by_user_id = parseInt(created_by, 10);
+    if (assigned_to) {
+      const parsedAssignedTo = parseInt(assigned_to, 10);
+      if (!Number.isNaN(parsedAssignedTo)) {
+        where.assigned_to_user_id = parsedAssignedTo;
+      }
+    }
+    if (created_by) {
+      const parsedCreatedBy = parseInt(created_by, 10);
+      if (!Number.isNaN(parsedCreatedBy)) {
+        where.created_by_user_id = parsedCreatedBy;
+      }
+    }
     if (department_id) where.department_id = department_id;
     if (location_id) where.location_id = location_id;
 

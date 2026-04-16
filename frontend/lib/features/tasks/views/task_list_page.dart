@@ -589,7 +589,7 @@ class _TaskTabView extends ConsumerWidget {
 
     return RefreshIndicator(
       onRefresh: () async =>
-          ref.read(taskProvider.notifier).setTab(tab),
+          await ref.read(taskProvider.notifier).setTab(tab),
       color: GemColors.green,
       child: ListView.builder(
         controller: scrollController,
