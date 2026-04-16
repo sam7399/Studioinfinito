@@ -179,86 +179,92 @@ class _SideNav extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
 
-            // ── Nav items ──────────────────────────────────────────────────
-            _NavItem(
-                icon: Icons.dashboard_outlined,
-                label: 'Dashboard',
-                path: '/dashboard',
-                currentLoc: loc),
-            if (isManagement)
-              _NavItem(
-                  icon: Icons.bar_chart_outlined,
-                  label: 'Reports',
-                  path: '/reports',
-                  currentLoc: loc),
-            _NavItem(
-                icon: Icons.task_alt_outlined,
-                label: 'Tasks',
-                path: '/tasks',
-                currentLoc: loc),
-            if (isApprover)
-              _NavItem(
-                  icon: Icons.approval_outlined,
-                  label: 'Approvals',
-                  path: '/approvals',
-                  currentLoc: loc),
-            if (isManagement)
-              _NavItem(
-                  icon: Icons.group_outlined,
-                  label: 'Users',
-                  path: '/users',
-                  currentLoc: loc),
-            if (isManagement)
-              _NavItem(
-                  icon: Icons.import_export_outlined,
-                  label: 'Import / Export',
-                  path: '/import-export',
-                  currentLoc: loc),
-            if (isManagement)
-              _NavItem(
-                  icon: Icons.assessment_outlined,
-                  label: 'HR Performance',
-                  path: '/hr-performance',
-                  currentLoc: loc),
-            if (isSuperAdmin)
-              _NavItem(
-                  icon: Icons.corporate_fare_outlined,
-                  label: 'Organization',
-                  path: '/org',
-                  currentLoc: loc),
-            if (isSuperAdmin)
-              _NavItem(
-                  icon: Icons.settings_outlined,
-                  label: 'System Config',
-                  path: '/system-config',
-                  currentLoc: loc),
-
-            const SizedBox(height: 8),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16),
-              child: Divider(
-                  color: Colors.white.withOpacity(0.08),
-                  height: 1),
+            // ── Nav items (scrollable so logout is always visible) ──────────
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _NavItem(
+                        icon: Icons.dashboard_outlined,
+                        label: 'Dashboard',
+                        path: '/dashboard',
+                        currentLoc: loc),
+                    if (isManagement)
+                      _NavItem(
+                          icon: Icons.bar_chart_outlined,
+                          label: 'Reports',
+                          path: '/reports',
+                          currentLoc: loc),
+                    _NavItem(
+                        icon: Icons.task_alt_outlined,
+                        label: 'Tasks',
+                        path: '/tasks',
+                        currentLoc: loc),
+                    if (isApprover)
+                      _NavItem(
+                          icon: Icons.approval_outlined,
+                          label: 'Approvals',
+                          path: '/approvals',
+                          currentLoc: loc),
+                    if (isManagement)
+                      _NavItem(
+                          icon: Icons.group_outlined,
+                          label: 'Users',
+                          path: '/users',
+                          currentLoc: loc),
+                    if (isManagement)
+                      _NavItem(
+                          icon: Icons.import_export_outlined,
+                          label: 'Import / Export',
+                          path: '/import-export',
+                          currentLoc: loc),
+                    if (isManagement)
+                      _NavItem(
+                          icon: Icons.assessment_outlined,
+                          label: 'HR Performance',
+                          path: '/hr-performance',
+                          currentLoc: loc),
+                    if (isSuperAdmin)
+                      _NavItem(
+                          icon: Icons.corporate_fare_outlined,
+                          label: 'Organization',
+                          path: '/org',
+                          currentLoc: loc),
+                    if (isSuperAdmin)
+                      _NavItem(
+                          icon: Icons.settings_outlined,
+                          label: 'System Config',
+                          path: '/system-config',
+                          currentLoc: loc),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Divider(
+                          color: Colors.white.withOpacity(0.08),
+                          height: 1),
+                    ),
+                    const SizedBox(height: 8),
+                    _NavItem(
+                        icon: Icons.lock_reset_outlined,
+                        label: 'Change Password',
+                        path: '/change-password',
+                        currentLoc: loc),
+                    _NavItem(
+                        icon: Icons.notifications_outlined,
+                        label: 'Notifications',
+                        path: '/notifications',
+                        currentLoc: loc),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
 
-            _NavItem(
-                icon: Icons.lock_reset_outlined,
-                label: 'Change Password',
-                path: '/change-password',
-                currentLoc: loc),
-            _NavItem(
-                icon: Icons.notifications_outlined,
-                label: 'Notifications',
-                path: '/notifications',
-                currentLoc: loc),
-
-            const Spacer(),
-
-            // ── Bottom: version + logout ───────────────────────────────────
+            // ── Bottom: version + logout (always visible) ─────────────────
+            Divider(color: Colors.white.withOpacity(0.08), height: 1),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 2),
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
               child: Text(
                 user?.companyName ?? 'The Studio Infinito',
                 style: TextStyle(
