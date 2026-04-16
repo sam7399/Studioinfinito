@@ -104,16 +104,16 @@ class TaskService {
     } = filters;
 
     const offset = (page - 1) * limit;
+    const dir = sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
     // Build where clause based on RBAC
     const visibilityScope = await RBACService.getTaskVisibilityScope(user);
     const where = { ...visibilityScope };
 
-    // Apply filters
     if (status) where.status = status;
     if (priority) where.priority = priority;
-    if (assigned_to) where.assigned_to_user_id = assigned_to;
-    if (created_by) where.created_by_user_id = created_by;
+    if (assigned_to) where.assigned_to_user_id = parseInt(assigned_to, 10);
+    if (created_by) where.created_by_user_id = parseInt(created_by, 10);
     if (department_id) where.department_id = department_id;
     if (location_id) where.location_id = location_id;
 
@@ -123,25 +123,47 @@ class TaskService {
       if (due_date_to) where.due_date[Op.lte] = due_date_to;
     }
 
+    // Full-text search across task fields AND associated model names
     if (search) {
+      const like = `%${search}%`;
       where[Op.or] = [
-        { title: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } }
+        { title: { [Op.like]: like } },
+        { description: { [Op.like]: like } },
+        { '$assignee.name$': { [Op.like]: like } },
+        { '$creator.name$': { [Op.like]: like } },
+        { '$department.name$': { [Op.like]: like } },
+        { '$location.name$': { [Op.like]: like } },
       ];
     }
 
-    // Use lightweight includes for the list — no many-to-many/nested joins
-    let count, tasks;
-    ({ count, rows: tasks } = await Task.findAndCountAll({
+    // Build ORDER clause — priority uses FIELD() for semantic ordering
+    let order;
+    const validFields = ['created_at', 'updated_at', 'due_date', 'status', 'title'];
+    if (sort_by === 'priority') {
+      // low=1, normal=2, high=3, urgent=4 so ASC = least urgent first
+      order = [Task.sequelize.literal(
+        `FIELD(\`Task\`.\`priority\`, 'low', 'normal', 'high', 'urgent') ${dir}`
+      )];
+    } else {
+      const safeField = validFields.includes(sort_by) ? sort_by : 'created_at';
+      order = [[safeField, dir]];
+    }
+
+    const queryOpts = {
       where,
       include: TASK_LIST_INCLUDES,
-      order: [[sort_by, sort_order.toUpperCase()]],
+      order,
       limit: parseInt(limit),
       offset: parseInt(offset),
-      distinct: true
-    }));
+      distinct: true,
+    };
 
-    // Apply privacy masking and collaborator visibility
+    // subQuery must be false when filtering on associated column names ($x.y$)
+    if (search) queryOpts.subQuery = false;
+
+    let count, tasks;
+    ({ count, rows: tasks } = await Task.findAndCountAll(queryOpts));
+
     const processedTasks = tasks.map(t => {
       let taskData = buildCollaboratorView(t, user.id);
       taskData = applyPrivacy(taskData, user);

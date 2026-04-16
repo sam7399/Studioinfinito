@@ -25,7 +25,7 @@ router.get(
       due_date_from: Joi.date().iso(),
       due_date_to: Joi.date().iso(),
       search: Joi.string(),
-      sort_by: Joi.string().valid('created_at', 'due_date', 'priority', 'status'),
+      sort_by: Joi.string().valid('created_at', 'updated_at', 'due_date', 'priority', 'status', 'title'),
       sort_order: Joi.string().valid('asc', 'desc').default('desc')
     })
   }),
