@@ -42,6 +42,7 @@ class _RowData {
   String priority = 'high';
   final TextEditingController titleCtrl = TextEditingController();
   final TextEditingController descCtrl = TextEditingController();
+  final TextEditingController parentTaskIdCtrl = TextEditingController();
   final DateTime assignDate = DateTime.now();
   DateTime? dueDate;
   List<PendingAttachment> attachments = [];
@@ -49,6 +50,11 @@ class _RowData {
   /// When true, all tasks spawned from this row are tagged with a shared
   /// group ID so they are traceable as "linked" in the task list.
   bool linkTasks = false;
+
+  int? get parentTaskId {
+    final v = int.tryParse(parentTaskIdCtrl.text.trim());
+    return v;
+  }
 
   bool get isValid =>
       assignedUserIds.isNotEmpty &&
@@ -63,6 +69,7 @@ class _RowData {
   void dispose() {
     titleCtrl.dispose();
     descCtrl.dispose();
+    parentTaskIdCtrl.dispose();
   }
 }
 
@@ -147,6 +154,7 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
       ..linkTasks = s.linkTasks;
     c.titleCtrl.text = s.titleCtrl.text;
     c.descCtrl.text = s.descCtrl.text;
+    c.parentTaskIdCtrl.text = s.parentTaskIdCtrl.text;
     setState(() => _rows.insert(i + 1, c));
   }
 
@@ -186,6 +194,7 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
           'location_id': row.locationId,
           'due_date': row.dueDate!.toIso8601String(),
           if (groupTag != null) 'tags': [groupTag],
+          if (row.parentTaskId != null) 'depends_on_task_id': row.parentTaskId,
         });
         payloadRowMap.add(rowIdx);
       }
@@ -1112,6 +1121,24 @@ class _TaskCreateMultiPageState extends ConsumerState<TaskCreateMultiPage> {
                 labelText: 'Description (optional)',
                 prefixIcon:
                     const Icon(Icons.notes_outlined, size: 18),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 12),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Parent Task ID (optional linking) ──────────────────────────
+            TextField(
+              controller: row.parentTaskIdCtrl,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Parent Task ID (optional)',
+                hintText: 'e.g. 42',
+                prefixIcon: const Icon(Icons.account_tree_outlined, size: 18),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(

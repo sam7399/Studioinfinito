@@ -728,8 +728,9 @@ class TaskService {
     const review = await TaskReview.create({
       task_id: taskId,
       reviewer_user_id: user.id,
+      status: 'approved',
       rating: reviewData.rating,
-      comments: reviewData.comments,
+      comment: reviewData.comments,
       quality_score: reviewData.quality_score,
       timeliness_score: reviewData.timeliness_score
     });

@@ -123,7 +123,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage>
   Widget build(BuildContext context) {
     final state = ref.watch(taskProvider);
     final userRole = ref.watch(authProvider).user?.role ?? '';
-    final canCreate = userRole != 'employee';
+    final canCreate = true;
     final isWide = MediaQuery.of(context).size.width > 700;
 
     // Sync tab controller if provider tab changed externally

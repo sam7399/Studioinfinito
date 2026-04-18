@@ -43,10 +43,9 @@ router.get(
   taskController.getTask
 );
 
-// Create task — only managers and above can assign work
+// Create task — all authenticated users can create tasks
 router.post(
   '/',
-  requireRole('superadmin', 'management', 'department_head', 'manager'),
   celebrate({
     [Segments.BODY]: Joi.object({
       title: Joi.string().required().max(255),
@@ -192,10 +191,9 @@ router.post(
   taskController.bulkAssign
 );
 
-// Bulk create multiple new tasks
+// Bulk create multiple new tasks — all authenticated users
 router.post(
   '/bulk-create',
-  requireRole('superadmin', 'management', 'department_head', 'manager'),
   celebrate({
     [Segments.BODY]: Joi.object({
       tasks: Joi.array().items(
@@ -208,6 +206,7 @@ router.post(
           location_id: Joi.number().integer().required(),
           due_date: Joi.date().iso().required(),
           estimated_hours: Joi.number().min(0).allow(null),
+          depends_on_task_id: Joi.number().integer().allow(null),
           tags: Joi.array().items(Joi.string()).default([])
         })
       ).min(1).required()
