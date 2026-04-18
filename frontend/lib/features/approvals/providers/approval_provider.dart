@@ -82,6 +82,7 @@ class PendingApprovalsNotifier extends Notifier<PendingApprovalsState> {
       _debounceTimer?.cancel();
       _debounceTimer = Timer(const Duration(milliseconds: 500), () {
         refreshPendingApprovals();
+        ref.invalidate(pendingApprovalsCountProvider);
       });
     });
 
@@ -156,8 +157,8 @@ class PendingApprovalsNotifier extends Notifier<PendingApprovalsState> {
   Future<void> approveTask(int taskId, {String? comments}) async {
     try {
       await _service.approveTask(taskId, comments: comments);
-      // Refresh the list after approval
       await refreshPendingApprovals();
+      ref.invalidate(pendingApprovalsCountProvider);
     } on DioException catch (e) {
       _logger.e('Error approving task in notifier', error: e);
       rethrow;
@@ -168,8 +169,8 @@ class PendingApprovalsNotifier extends Notifier<PendingApprovalsState> {
   Future<void> rejectTask(int taskId, String reason) async {
     try {
       await _service.rejectTask(taskId, reason);
-      // Refresh the list after rejection
       await refreshPendingApprovals();
+      ref.invalidate(pendingApprovalsCountProvider);
     } on DioException catch (e) {
       _logger.e('Error rejecting task in notifier', error: e);
       rethrow;
