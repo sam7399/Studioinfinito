@@ -51,6 +51,9 @@ dependencies:
   socket_io_client: ^2.0.1
   web_socket_channel: ^3.0.3
 
+  # WASM-compatible web APIs (replaces dart:html)
+  web: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

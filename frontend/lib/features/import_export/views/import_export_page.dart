@@ -1,5 +1,6 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'dart:typed_data';
+import 'package:web/web.dart' as web;
 
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -87,12 +88,16 @@ class _ImportExportPageState extends ConsumerState<ImportExportPage> {
       final mimeType = filename.endsWith('.csv')
           ? 'text/csv;charset=utf-8'
           : 'application/octet-stream';
-      final blob = html.Blob([bytes], mimeType);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
+      final blob = web.Blob(
+        [Uint8List.fromList(bytes).toJS].toJS,
+        web.BlobPropertyBag(type: mimeType),
+      );
+      final url = web.URL.createObjectURL(blob);
+      (web.document.createElement('a') as web.HTMLAnchorElement)
+        ..href = url
         ..setAttribute('download', filename)
         ..click();
-      html.Url.revokeObjectUrl(url);
+      web.URL.revokeObjectURL(url);
 
       _setResult(label, '✓ Export complete — check your downloads');
     } catch (e) {

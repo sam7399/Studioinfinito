@@ -1,5 +1,6 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'dart:typed_data';
+import 'package:web/web.dart' as web;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -247,17 +248,19 @@ class _ReportsPageState extends ConsumerState<ReportsPage>
         options: Options(responseType: ResponseType.bytes),
       );
       final bytes = response.data ?? [];
-      final blob = html.Blob(
-        [bytes],
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      final blob = web.Blob(
+        [Uint8List.fromList(bytes).toJS].toJS,
+        web.BlobPropertyBag(
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
       );
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
+      final url = web.URL.createObjectURL(blob);
+      (web.document.createElement('a') as web.HTMLAnchorElement)
+        ..href = url
         ..setAttribute(
             'download',
             'task_report_${groupBy}_${DateTime.now().millisecondsSinceEpoch}.xlsx')
         ..click();
-      html.Url.revokeObjectUrl(url);
+      web.URL.revokeObjectURL(url);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -422,7 +425,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage>
     );
   }
 
-  void _printPage() => html.window.print();
+  void _printPage() => web.window.print();
 
   void _showEmailDialog() {
     showDialog(
