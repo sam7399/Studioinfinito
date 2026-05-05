@@ -724,25 +724,31 @@ class TaskService {
       throw new Error('Task is not in a reviewable state');
     }
 
+    // Validate review status
+    if (!['approved', 'reopened'].includes(reviewData.status)) {
+      throw new Error('Invalid review status. Must be "approved" or "reopened"');
+    }
+
     // Create review
     const review = await TaskReview.create({
       task_id: taskId,
       reviewer_user_id: user.id,
-      status: 'approved',
+      status: reviewData.status,
       rating: reviewData.rating,
       comment: reviewData.comments,
       quality_score: reviewData.quality_score,
       timeliness_score: reviewData.timeliness_score
     });
 
-    // Update task status to finalized
-    await task.update({ status: 'finalized' });
+    // Update task status based on review
+    const newTaskStatus = reviewData.status === 'approved' ? 'finalized' : 'reopened';
+    await task.update({ status: newTaskStatus });
 
     // Log activity
     await TaskActivity.create({
       task_id: taskId,
       actor_user_id: user.id,
-      action: 'approved',
+      action: reviewData.status,
       note: `Task reviewed with rating ${reviewData.rating}/5`
     });
 
@@ -782,7 +788,7 @@ class TaskService {
         assignee.name,
         task,
         user.name || 'Reviewer',
-        'approved',
+        reviewData.status,
         reviewData.comments
       ).catch(err => logger.error('Review email failed:', err));
     }

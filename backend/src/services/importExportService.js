@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const csv = require('fast-csv');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const bcrypt = require('bcrypt');
 const { User, Task, Company, Department, Location } = require('../models');
 const logger = require('../utils/logger');
@@ -385,14 +385,18 @@ class ImportExportService {
    * Read Excel file — auto-detects the header row so sample files with a
    * description row (row 1) + key row (row 2) import correctly.
    */
-  static readExcel(filePath) {
+  static async readExcel(filePath) {
     try {
-      const workbook = XLSX.readFile(filePath);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(filePath);
+      const worksheet = workbook.worksheets[0];
 
       // Get raw rows as arrays
-      const raw = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+      const raw = [];
+      worksheet.eachRow((row, rowNumber) => {
+        raw.push(row.values.slice(1)); // slice(1) to remove the first empty element
+      });
+
       if (raw.length === 0) return [];
 
       // Known field names used in import templates
@@ -405,14 +409,14 @@ class ImportExportService {
       // Find the first row (up to row 3) whose cells match known field names
       let headerIdx = 0;
       for (let i = 0; i < Math.min(raw.length, 3); i++) {
-        const normalised = raw[i].map(v => String(v).toLowerCase().trim());
+        const normalised = raw[i].map(v => String(v || '').toLowerCase().trim());
         if (normalised.filter(v => KNOWN.has(v)).length >= 2) {
           headerIdx = i;
           break;
         }
       }
 
-      const headers = raw[headerIdx].map(v => String(v).trim());
+      const headers = raw[headerIdx].map(v => String(v || '').trim());
       const data = [];
       for (let i = headerIdx + 1; i < raw.length; i++) {
         const row = raw[i];
@@ -420,7 +424,7 @@ class ImportExportService {
         if (row.every(v => v === '' || v === null || v === undefined)) continue;
         const obj = {};
         headers.forEach((h, ci) => {
-          if (h) obj[h] = row[ci] !== undefined ? String(row[ci]).trim() : '';
+          if (h) obj[h] = row[ci] !== undefined ? String(row[ci] || '').trim() : '';
         });
         data.push(obj);
       }

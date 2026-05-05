@@ -97,7 +97,7 @@ class AuthService {
 
     // Send email with reset link
     try {
-      await mailer.sendPasswordResetEmail(user.email, resetToken);
+      await mailer.sendPasswordReset(user.email, user.name, `${config.urls.app}/reset-password?token=${resetToken}`);
       logger.info(`Password reset email sent to: ${user.email}`);
     } catch (error) {
       logger.error('Failed to send password reset email:', error);

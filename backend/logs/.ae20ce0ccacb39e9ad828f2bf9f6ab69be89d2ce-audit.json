@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\JSK\\Downloads\\Studioinfinito-main\\Studioinfinito-main\\backend\\logs\\.ae20ce0ccacb39e9ad828f2bf9f6ab69be89d2ce-audit.json",
+    "files": [
+        {
+            "date": 1776796632023,
+            "name": "C:\\Users\\JSK\\Downloads\\Studioinfinito-main\\Studioinfinito-main\\backend\\logs\\exceptions-2026-04-22.log",
+            "hash": "e5f847edbdd616e133caaf967f8f5b57accf9dfc2f91019203db6dcb0f5df308"
+        }
+    ],
+    "hashType": "sha256"
+}

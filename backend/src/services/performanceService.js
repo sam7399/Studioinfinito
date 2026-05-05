@@ -14,7 +14,7 @@ class PerformanceService {
       // Get all tasks completed by user in the period
       const completedTasks = await Task.findAll({
         where: {
-          assigned_to: userId,
+          assigned_to_user_id: userId,
           status: { [Op.in]: ['finalized', 'complete_pending_review'] },
           updated_at: { [Op.between]: [startDate, endDate] }
         },
@@ -222,7 +222,7 @@ class PerformanceService {
 
       // Get recent tasks
       const recentTasks = await Task.findAll({
-        where: { assigned_to: userId },
+        where: { assigned_to_user_id: userId },
         order: [['updated_at', 'DESC']],
         limit: 10,
         attributes: ['id', 'title', 'status', 'priority', 'due_date', 'created_at', 'updated_at']

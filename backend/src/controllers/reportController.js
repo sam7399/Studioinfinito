@@ -316,7 +316,7 @@ class ReportController {
   // GET /reports/export-excel  — returns multi-sheet XLSX (group_by: status|department|location|user|company|full)
   static async exportExcel(req, res, next) {
     try {
-      const XLSX = require('xlsx');
+      const ExcelJS = require('exceljs');
       const baseWhere = buildWhereClause(req.query, req.user);
       const groupBy = req.query.group_by || 'status';
       const now = new Date();
@@ -365,14 +365,16 @@ class ReportController {
       ];
 
       const makeSheet = (headers, rows) => {
-        const aoa = [headers, ...rows];
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
-        ws['!cols'] = headers.map((h, ci) => {
-          const max = aoa.reduce((m, row) => Math.max(m, String(row[ci] ?? '').length), h.length);
-          return { wch: Math.min(max + 2, 60) };
+        const worksheet = workbook.addWorksheet('temp');
+        worksheet.addRow(headers);
+        rows.forEach(row => worksheet.addRow(row));
+        // Set column widths
+        headers.forEach((h, ci) => {
+          const max = [h, ...rows.map(r => String(r[ci] ?? ''))].reduce((m, cell) => Math.max(m, cell.length), 0);
+          worksheet.getColumn(ci + 1).width = Math.min(max + 2, 60);
         });
-        ws['!freeze'] = { xSplit: 0, ySplit: 1 };
-        return ws;
+        worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+        return worksheet;
       };
 
       const fetchTasks = (where) => Task.findAll({
@@ -393,10 +395,19 @@ class ReportController {
         return s;
       };
 
-      const addTaskSheet = (wb, tasks, name) =>
-        XLSX.utils.book_append_sheet(wb, makeSheet(TASK_HEADERS, tasks.map(taskToRow)), safeName(name));
+      const addTaskSheet = (wb, tasks, name) => {
+        const worksheet = wb.addWorksheet(safeName(name));
+        worksheet.addRow(TASK_HEADERS);
+        tasks.map(taskToRow).forEach(row => worksheet.addRow(row));
+        // Set column widths
+        TASK_HEADERS.forEach((h, ci) => {
+          const max = [h, ...tasks.map(t => String(taskToRow(t)[ci] ?? ''))].reduce((m, cell) => Math.max(m, cell.length), 0);
+          worksheet.getColumn(ci + 1).width = Math.min(max + 2, 60);
+        });
+        worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+      };
 
-      const wb = XLSX.utils.book_new();
+      const wb = new ExcelJS.Workbook();
 
       // ── GROUP BY STATUS ─────────────────────────────────────────────────────
       if (groupBy === 'status') {
@@ -477,7 +488,14 @@ class ReportController {
           summarizeGroup('Reopened',       allTasks.filter(t => t.status === 'reopened')),
           summarizeGroup('Overdue',        allTasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== 'finalized'))
         ];
-        XLSX.utils.book_append_sheet(wb, makeSheet(SUMMARY_HEADERS, statusRows), safeName('Status Summary'));
+        const statusSheet = wb.addWorksheet(safeName('Status Summary'));
+        statusSheet.addRow(SUMMARY_HEADERS);
+        statusRows.forEach(row => statusSheet.addRow(row));
+        SUMMARY_HEADERS.forEach((h, ci) => {
+          const max = [h, ...statusRows.map(r => String(r[ci] ?? ''))].reduce((m, cell) => Math.max(m, cell.length), 0);
+          statusSheet.getColumn(ci + 1).width = Math.min(max + 2, 60);
+        });
+        statusSheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
 
         // Department summary
         const deptMap = new Map();
@@ -488,7 +506,14 @@ class ReportController {
           deptMap.get(key).tasks.push(t);
         });
         const deptRows = [...deptMap.values()].map(({ name, tasks }) => summarizeGroup(name, tasks));
-        XLSX.utils.book_append_sheet(wb, makeSheet(SUMMARY_HEADERS, deptRows), safeName('Dept Summary'));
+        const deptSheet = wb.addWorksheet(safeName('Dept Summary'));
+        deptSheet.addRow(SUMMARY_HEADERS);
+        deptRows.forEach(row => deptSheet.addRow(row));
+        SUMMARY_HEADERS.forEach((h, ci) => {
+          const max = [h, ...deptRows.map(r => String(r[ci] ?? ''))].reduce((m, cell) => Math.max(m, cell.length), 0);
+          deptSheet.getColumn(ci + 1).width = Math.min(max + 2, 60);
+        });
+        deptSheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
 
         // Location summary
         const locMap = new Map();
@@ -499,7 +524,14 @@ class ReportController {
           locMap.get(key).tasks.push(t);
         });
         const locRows = [...locMap.values()].map(({ name, tasks }) => summarizeGroup(name, tasks));
-        XLSX.utils.book_append_sheet(wb, makeSheet(SUMMARY_HEADERS, locRows), safeName('Location Summary'));
+        const locSheet = wb.addWorksheet(safeName('Location Summary'));
+        locSheet.addRow(SUMMARY_HEADERS);
+        locRows.forEach(row => locSheet.addRow(row));
+        SUMMARY_HEADERS.forEach((h, ci) => {
+          const max = [h, ...locRows.map(r => String(r[ci] ?? ''))].reduce((m, cell) => Math.max(m, cell.length), 0);
+          locSheet.getColumn(ci + 1).width = Math.min(max + 2, 60);
+        });
+        locSheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
 
         // User summary
         const userMap = new Map();
@@ -510,7 +542,14 @@ class ReportController {
           userMap.get(key).tasks.push(t);
         });
         const userRows = [...userMap.values()].map(({ name, tasks }) => summarizeGroup(name, tasks));
-        XLSX.utils.book_append_sheet(wb, makeSheet(SUMMARY_HEADERS, userRows), safeName('User Summary'));
+        const userSheet = wb.addWorksheet(safeName('User Summary'));
+        userSheet.addRow(SUMMARY_HEADERS);
+        userRows.forEach(row => userSheet.addRow(row));
+        SUMMARY_HEADERS.forEach((h, ci) => {
+          const max = [h, ...userRows.map(r => String(r[ci] ?? ''))].reduce((m, cell) => Math.max(m, cell.length), 0);
+          userSheet.getColumn(ci + 1).width = Math.min(max + 2, 60);
+        });
+        userSheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
 
         // Company summary
         const coMap = new Map();
@@ -521,10 +560,17 @@ class ReportController {
           coMap.get(key).tasks.push(t);
         });
         const coRows = [...coMap.values()].map(({ name, tasks }) => summarizeGroup(name, tasks));
-        XLSX.utils.book_append_sheet(wb, makeSheet(SUMMARY_HEADERS, coRows), safeName('Company Summary'));
+        const coSheet = wb.addWorksheet(safeName('Company Summary'));
+        coSheet.addRow(SUMMARY_HEADERS);
+        coRows.forEach(row => coSheet.addRow(row));
+        SUMMARY_HEADERS.forEach((h, ci) => {
+          const max = [h, ...coRows.map(r => String(r[ci] ?? ''))].reduce((m, cell) => Math.max(m, cell.length), 0);
+          coSheet.getColumn(ci + 1).width = Math.min(max + 2, 60);
+        });
+        coSheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
       }
 
-      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      const buf = await wb.xlsx.writeBuffer();
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="task_report_${Date.now()}.xlsx"`);
       res.send(buf);

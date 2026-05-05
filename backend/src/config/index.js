@@ -64,17 +64,27 @@ const config = {
 
 // Validate required configuration
 const requiredEnvVars = [
-  'JWT_SECRET',
-  'EMAILHOST',
-  'EMAILUSER',
-  'EMAILPASS'
+  'JWT_SECRET'
 ];
+
+// Email vars are only required in production
+if (process.env.NODE_ENV === 'production') {
+  requiredEnvVars.push('EMAILHOST', 'EMAILUSER', 'EMAILPASS');
+}
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingVars.length > 0 && process.env.NODE_ENV !== 'test') {
   console.log('[CONFIG] FATAL: Missing required environment variables:', missingVars.join(', '));
   process.exit(1);
+}
+
+// Warn about missing email config in development
+if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+  const missingEmailVars = ['EMAILHOST', 'EMAILUSER', 'EMAILPASS'].filter(v => !process.env[v]);
+  if (missingEmailVars.length > 0) {
+    console.log('[CONFIG] WARN: Missing email configuration:', missingEmailVars.join(', '), '- Email features will be disabled.');
+  }
 }
 
 module.exports = config;
