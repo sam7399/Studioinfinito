@@ -55,6 +55,9 @@ db.NotificationPreference = require('./notificationPreference')(sequelize, Seque
 db.TaskMetrics = require('./taskMetrics')(sequelize, Sequelize.DataTypes);
 db.DepartmentMetrics = require('./departmentMetrics')(sequelize, Sequelize.DataTypes);
 db.EmployeePerformance = require('./employeePerformance')(sequelize, Sequelize.DataTypes);
+db.ChatRoom = require('./chatRoom')(sequelize, Sequelize.DataTypes);
+db.ChatRoomMember = require('./chatRoomMember')(sequelize, Sequelize.DataTypes);
+db.ChatMessage = require('./chatMessage')(sequelize, Sequelize.DataTypes);
 
 // Define associations
 Object.keys(db).forEach(modelName => {

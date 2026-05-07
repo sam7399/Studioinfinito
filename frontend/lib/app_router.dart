@@ -24,6 +24,8 @@ import 'features/notifications/views/notification_detail_screen.dart';
 import 'features/notifications/views/notification_settings_screen.dart';
 import 'features/approvals/views/pending_approvals_screen.dart';
 import 'features/approvals/views/approval_detail_screen.dart';
+import 'features/chat/views/chat_list_page.dart';
+import 'features/chat/views/chat_room_page.dart';
 import 'widgets/app_shell.dart';
 
 /// Bridges Riverpod auth state into a ChangeNotifier so GoRouter's
@@ -123,6 +125,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
            GoRoute(path: '/notifications/settings', builder: (_, __) => const NotificationSettingsScreen()),
+           GoRoute(path: '/chat', builder: (_, __) => const ChatListPage()),
+           GoRoute(
+             path: '/chat/:id',
+             builder: (_, state) {
+               final id = int.tryParse(state.pathParameters['id'] ?? '');
+               if (id == null) return const ChatListPage();
+               return ChatRoomPage(roomId: id);
+             },
+           ),
            GoRoute(path: '/approvals', builder: (_, __) => const PendingApprovalsScreen()),
            GoRoute(
              path: '/approvals/:id',

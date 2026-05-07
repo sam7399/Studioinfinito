@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/providers/auth_provider.dart';
 import '../core/theme/app_theme.dart';
+import '../features/chat/providers/chat_provider.dart';
 import '../features/notifications/widgets/notification_bell.dart';
 
 class AppShell extends ConsumerWidget {
@@ -201,6 +202,12 @@ class _SideNav extends ConsumerWidget {
                         label: 'Tasks',
                         path: '/tasks',
                         currentLoc: loc),
+                    _NavItem(
+                        icon: Icons.chat_bubble_outline,
+                        label: 'Messages',
+                        path: '/chat',
+                        currentLoc: loc,
+                        badgeCount: ref.watch(chatUnreadProvider)),
                     if (isApprover)
                       _NavItem(
                           icon: Icons.approval_outlined,
@@ -313,12 +320,14 @@ class _NavItem extends StatelessWidget {
   final String label;
   final String path;
   final String currentLoc;
+  final int badgeCount;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.path,
     required this.currentLoc,
+    this.badgeCount = 0,
   });
 
   bool get _isActive {
@@ -331,6 +340,9 @@ class _NavItem extends StatelessWidget {
     if (path == '/notifications') {
       return currentLoc == '/notifications' ||
           currentLoc.startsWith('/notifications/');
+    }
+    if (path == '/chat') {
+      return currentLoc == '/chat' || currentLoc.startsWith('/chat/');
     }
     return currentLoc.startsWith(path);
   }
@@ -372,17 +384,35 @@ class _NavItem extends StatelessWidget {
                       : Colors.white54,
                   size: 18),
               const SizedBox(width: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  color:
-                      _isActive ? Colors.white : Colors.white70,
-                  fontSize: 13,
-                  fontWeight: _isActive
-                      ? FontWeight.w600
-                      : FontWeight.normal,
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color:
+                        _isActive ? Colors.white : Colors.white70,
+                    fontSize: 13,
+                    fontWeight: _isActive
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
                 ),
               ),
+              if (badgeCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE65C00),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    badgeCount > 99 ? '99+' : '$badgeCount',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
             ]),
           ),
         ),

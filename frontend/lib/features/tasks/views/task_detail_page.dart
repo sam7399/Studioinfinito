@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import '../providers/task_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../chat/providers/chat_provider.dart';
 import 'attachment_section.dart';
 
 class TaskDetailPage extends ConsumerStatefulWidget {
@@ -460,6 +461,33 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                           ?.copyWith(fontWeight: FontWeight.bold),
                       overflow: TextOverflow.ellipsis),
                 ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.forum_outlined, size: 16),
+                  label: const Text('Discussion'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF7C3AED),
+                    side: const BorderSide(color: Color(0xFF7C3AED)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: () async {
+                    try {
+                      final room = await ref
+                          .read(chatRoomsProvider.notifier)
+                          .openTask(widget.taskId);
+                      if (context.mounted) context.go('/chat/${room.id}');
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Could not open chat: $e')),
+                        );
+                      }
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
                 if (isManagement)
                   IconButton(
                     icon:

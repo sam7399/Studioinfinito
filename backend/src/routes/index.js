@@ -14,6 +14,7 @@ const notificationRoutes = require('./notification.routes');
 const approvalRoutes = require('./approval.routes');
 const performanceRoutes = require('./performance.routes');
 const auditRoutes = require('./audit.routes');
+const chatRoutes = require('./chat.routes');
 
 // Health check (no auth required)
 router.use('/health', healthRoutes);
@@ -32,5 +33,6 @@ router.use('/config', configRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/hr', performanceRoutes);
 router.use('/audit', auditRoutes);
+router.use('/chat', chatRoutes);
 
 module.exports = router;

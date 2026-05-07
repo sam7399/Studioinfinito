@@ -142,6 +142,48 @@ function initializeSocket(server) {
     });
 
     /**
+     * Chat: join a chat room (must be a member — verified via DB)
+     */
+    socket.on('chat:join', async (data) => {
+      try {
+        const roomId = data && data.room_id;
+        if (!roomId) return;
+        const { ChatRoomMember } = require('../models');
+        const member = await ChatRoomMember.findOne({
+          where: { room_id: roomId, user_id: socket.userId }
+        });
+        if (member) {
+          socket.join(`chat:${roomId}`);
+          logger.debug(`User ${socket.userId} joined chat:${roomId}`);
+        }
+      } catch (err) {
+        logger.error('chat:join error', { error: err.message });
+      }
+    });
+
+    socket.on('chat:leave', (data) => {
+      try {
+        const roomId = data && data.room_id;
+        if (roomId) socket.leave(`chat:${roomId}`);
+      } catch (_) {}
+    });
+
+    /**
+     * Chat: typing indicator (broadcast to room except sender)
+     */
+    socket.on('chat:typing', (data) => {
+      try {
+        const roomId = data && data.room_id;
+        if (!roomId) return;
+        socket.to(`chat:${roomId}`).emit('chat:typing', {
+          room_id: roomId,
+          user_id: socket.userId,
+          typing: data.typing !== false
+        });
+      } catch (_) {}
+    });
+
+    /**
      * Handle errors
      */
     socket.on('error', (error) => {

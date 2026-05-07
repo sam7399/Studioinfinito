@@ -89,4 +89,13 @@ class ApiConstants {
 
   // Health
   static const String health = '/health';
+
+  // Chat
+  static const String chatRooms = '/chat/rooms';
+  static const String chatUnreadCount = '/chat/unread-count';
+  static const String chatDirectRoom = '/chat/rooms/direct';
+  static String chatTaskRoom(int taskId) => '/chat/rooms/task/$taskId';
+  static String chatRoomMessages(int roomId) => '/chat/rooms/$roomId/messages';
+  static String chatRoomRead(int roomId) => '/chat/rooms/$roomId/read';
+  static String chatMessageById(int messageId) => '/chat/messages/$messageId';
 }

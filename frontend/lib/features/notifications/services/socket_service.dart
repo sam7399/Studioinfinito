@@ -37,6 +37,12 @@ class SocketService {
   final List<OnDataChangeCallback> _onTaskUpdateCallbacks = [];
   final List<OnDataChangeCallback> _onUserUpdateCallbacks = [];
   final List<OnDataChangeCallback> _onApprovalUpdateCallbacks = [];
+  final List<OnDataChangeCallback> _onChatMessageCallbacks = [];
+  final List<OnDataChangeCallback> _onChatRoomUpdateCallbacks = [];
+  final List<OnDataChangeCallback> _onChatTypingCallbacks = [];
+  final List<OnDataChangeCallback> _onChatReadCallbacks = [];
+  final List<OnDataChangeCallback> _onChatMessageEditedCallbacks = [];
+  final List<OnDataChangeCallback> _onChatMessageDeletedCallbacks = [];
 
   // ── Connection state ───────────────────────────────────────────────────
   bool _isConnected = false;
@@ -215,10 +221,64 @@ class SocketService {
     socket.on('user:updated', _handleUserUpdateEvent);
     socket.on('user:deleted', _handleUserUpdateEvent);
 
+    // ── Chat events ──────────────────────────────────────────────────────
+    socket.on('chat:message_new', (data) => _dispatch(_onChatMessageCallbacks, data));
+    socket.on('chat:room_updated', (data) => _dispatch(_onChatRoomUpdateCallbacks, data));
+    socket.on('chat:typing', (data) => _dispatch(_onChatTypingCallbacks, data));
+    socket.on('chat:read', (data) => _dispatch(_onChatReadCallbacks, data));
+    socket.on('chat:message_edited', (data) => _dispatch(_onChatMessageEditedCallbacks, data));
+    socket.on('chat:message_deleted', (data) => _dispatch(_onChatMessageDeletedCallbacks, data));
+
     // ── Error handling ───────────────────────────────────────────────────
     socket.on('error', (error) {
       _logger.e('Socket error: $error');
     });
+  }
+
+  void _dispatch(List<OnDataChangeCallback> list, dynamic data) {
+    try {
+      final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+      for (final cb in list) {
+        cb(map);
+      }
+    } catch (e) {
+      _logger.e('Socket dispatch error: $e');
+    }
+  }
+
+  void joinChatRoom(int roomId) => emit('chat:join', {'room_id': roomId});
+  void leaveChatRoom(int roomId) => emit('chat:leave', {'room_id': roomId});
+  void emitTyping(int roomId, bool typing) =>
+      emit('chat:typing', {'room_id': roomId, 'typing': typing});
+
+  void Function() onChatMessage(OnDataChangeCallback cb) {
+    _onChatMessageCallbacks.add(cb);
+    return () => _onChatMessageCallbacks.remove(cb);
+  }
+
+  void Function() onChatRoomUpdate(OnDataChangeCallback cb) {
+    _onChatRoomUpdateCallbacks.add(cb);
+    return () => _onChatRoomUpdateCallbacks.remove(cb);
+  }
+
+  void Function() onChatTyping(OnDataChangeCallback cb) {
+    _onChatTypingCallbacks.add(cb);
+    return () => _onChatTypingCallbacks.remove(cb);
+  }
+
+  void Function() onChatRead(OnDataChangeCallback cb) {
+    _onChatReadCallbacks.add(cb);
+    return () => _onChatReadCallbacks.remove(cb);
+  }
+
+  void Function() onChatMessageEdited(OnDataChangeCallback cb) {
+    _onChatMessageEditedCallbacks.add(cb);
+    return () => _onChatMessageEditedCallbacks.remove(cb);
+  }
+
+  void Function() onChatMessageDeleted(OnDataChangeCallback cb) {
+    _onChatMessageDeletedCallbacks.add(cb);
+    return () => _onChatMessageDeletedCallbacks.remove(cb);
   }
 
   void _handleNotificationEvent(dynamic data) {
@@ -428,6 +488,12 @@ class SocketService {
       _onTaskUpdateCallbacks.clear();
       _onUserUpdateCallbacks.clear();
       _onApprovalUpdateCallbacks.clear();
+      _onChatMessageCallbacks.clear();
+      _onChatRoomUpdateCallbacks.clear();
+      _onChatTypingCallbacks.clear();
+      _onChatReadCallbacks.clear();
+      _onChatMessageEditedCallbacks.clear();
+      _onChatMessageDeletedCallbacks.clear();
       _onPollTick = null;
       _logger.i('Socket service disposed');
     } catch (e, stackTrace) {

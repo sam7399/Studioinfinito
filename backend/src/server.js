@@ -149,6 +149,69 @@ async function ensureSchema() {
       logger.info('[schema] Created table user_companies');
     }
 
+    if (!tables.includes('chat_rooms')) {
+      await sequelize.query(`
+        CREATE TABLE chat_rooms (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          type ENUM('direct','task','group') NOT NULL DEFAULT 'direct',
+          task_id INT NULL,
+          name VARCHAR(255) NULL,
+          created_by_user_id INT NOT NULL,
+          last_message_at DATETIME NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_cr_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL ON UPDATE CASCADE,
+          CONSTRAINT fk_cr_creator FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+          KEY cr_task_idx (task_id),
+          KEY cr_type_idx (type),
+          KEY cr_last_msg_idx (last_message_at)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      logger.info('[schema] Created table chat_rooms');
+    }
+
+    if (!tables.includes('chat_room_members')) {
+      await sequelize.query(`
+        CREATE TABLE chat_room_members (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          room_id INT NOT NULL,
+          user_id INT NOT NULL,
+          last_read_at DATETIME NULL,
+          muted TINYINT(1) NOT NULL DEFAULT 0,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_crm_room FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT fk_crm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE KEY crm_room_user_unique (room_id, user_id),
+          KEY crm_user_idx (user_id)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      logger.info('[schema] Created table chat_room_members');
+    }
+
+    if (!tables.includes('chat_messages')) {
+      await sequelize.query(`
+        CREATE TABLE chat_messages (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          room_id INT NOT NULL,
+          sender_user_id INT NOT NULL,
+          body TEXT NOT NULL,
+          message_type ENUM('text','image','file','system') NOT NULL DEFAULT 'text',
+          reply_to_id INT NULL,
+          edited_at DATETIME NULL,
+          deleted_at DATETIME NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_cm_room FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT fk_cm_sender FOREIGN KEY (sender_user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+          CONSTRAINT fk_cm_reply FOREIGN KEY (reply_to_id) REFERENCES chat_messages(id) ON DELETE SET NULL ON UPDATE CASCADE,
+          KEY cm_room_created_idx (room_id, created_at),
+          KEY cm_sender_idx (sender_user_id)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      logger.info('[schema] Created table chat_messages');
+    }
+
     if (!tables.includes('user_locations')) {
       await sequelize.query(`
         CREATE TABLE user_locations (
