@@ -94,8 +94,16 @@ class ApiConstants {
   static const String chatRooms = '/chat/rooms';
   static const String chatUnreadCount = '/chat/unread-count';
   static const String chatDirectRoom = '/chat/rooms/direct';
+  static const String chatGroupRoom = '/chat/rooms/group';
   static String chatTaskRoom(int taskId) => '/chat/rooms/task/$taskId';
   static String chatRoomMessages(int roomId) => '/chat/rooms/$roomId/messages';
+  static String chatRoomMessagesUpload(int roomId) =>
+      '/chat/rooms/$roomId/messages/upload';
   static String chatRoomRead(int roomId) => '/chat/rooms/$roomId/read';
+  static String chatRoomMembers(int roomId) => '/chat/rooms/$roomId/members';
+  static String chatRoomMemberById(int roomId, int userId) =>
+      '/chat/rooms/$roomId/members/$userId';
   static String chatMessageById(int messageId) => '/chat/messages/$messageId';
+  static String chatAttachmentById(int attachmentId) =>
+      '/chat/attachments/$attachmentId';
 }

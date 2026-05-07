@@ -58,6 +58,7 @@ db.EmployeePerformance = require('./employeePerformance')(sequelize, Sequelize.D
 db.ChatRoom = require('./chatRoom')(sequelize, Sequelize.DataTypes);
 db.ChatRoomMember = require('./chatRoomMember')(sequelize, Sequelize.DataTypes);
 db.ChatMessage = require('./chatMessage')(sequelize, Sequelize.DataTypes);
+db.ChatAttachment = require('./chatAttachment')(sequelize, Sequelize.DataTypes);
 
 // Define associations
 Object.keys(db).forEach(modelName => {

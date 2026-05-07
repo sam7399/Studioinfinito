@@ -6,6 +6,7 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../org/providers/org_provider.dart';
 import '../models/chat_models.dart';
 import '../providers/chat_provider.dart';
+import 'chat_group_create_dialog.dart';
 
 class ChatListPage extends ConsumerWidget {
   const ChatListPage({super.key});
@@ -49,11 +50,50 @@ class ChatListPage extends ConsumerWidget {
                   icon: const Icon(Icons.refresh),
                   tooltip: 'Refresh',
                 ),
-                FilledButton.icon(
-                  onPressed: () => _showNewChatDialog(context, ref),
-                  icon: const Icon(Icons.add_comment_outlined, size: 18),
-                  label: const Text('New chat'),
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE65C00)),
+                PopupMenuButton<String>(
+                  tooltip: 'New chat',
+                  onSelected: (v) {
+                    if (v == 'direct') _showNewChatDialog(context, ref);
+                    if (v == 'group') showCreateGroupDialog(context, ref);
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'direct',
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_outline, size: 16),
+                          SizedBox(width: 8),
+                          Text('New direct chat'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'group',
+                      child: Row(
+                        children: [
+                          Icon(Icons.group_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('New group'),
+                        ],
+                      ),
+                    ),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE65C00),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 18, color: Colors.white),
+                        SizedBox(width: 6),
+                        Text('New', style: TextStyle(color: Colors.white, fontSize: 13)),
+                        Icon(Icons.arrow_drop_down, size: 18, color: Colors.white),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -186,7 +226,7 @@ class ChatListPage extends ConsumerWidget {
   }
 }
 
-class _RoomTile extends StatelessWidget {
+class _RoomTile extends ConsumerWidget {
   final ChatRoom room;
   final int currentUserId;
   const _RoomTile({required this.room, required this.currentUserId});
@@ -204,13 +244,30 @@ class _RoomTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final name = room.displayName(currentUserId);
     final preview = room.lastMessage?.body ?? 'No messages yet';
     final isUnread = room.unreadCount > 0;
     final color = room.type == 'task'
         ? const Color(0xFF7C3AED)
-        : const Color(0xFFE65C00);
+        : (room.type == 'group' ? const Color(0xFF1D4ED8) : const Color(0xFFE65C00));
+    final IconData avatarIcon = room.type == 'task'
+        ? Icons.task_alt_outlined
+        : room.type == 'group'
+            ? Icons.group_outlined
+            : Icons.person_outline;
+
+    // For direct chats, show online dot for the other user
+    bool showOnline = false;
+    if (room.type == 'direct') {
+      final other = room.members
+          .where((m) => m.userId != currentUserId)
+          .map((m) => m.userId)
+          .firstOrNull;
+      if (other != null) {
+        showOnline = ref.watch(chatPresenceProvider).contains(other);
+      }
+    }
 
     return InkWell(
       onTap: () => context.go('/chat/${room.id}'),
@@ -218,13 +275,28 @@ class _RoomTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: color.withOpacity(0.15),
-              child: Icon(
-                room.type == 'task' ? Icons.task_alt_outlined : Icons.person_outline,
-                color: color,
-              ),
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: color.withOpacity(0.15),
+                  child: Icon(avatarIcon, color: color),
+                ),
+                if (showOnline)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 12),
             Expanded(

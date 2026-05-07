@@ -51,6 +51,7 @@ module.exports = (sequelize, DataTypes) => {
     ChatMessage.belongsTo(models.ChatRoom, { foreignKey: 'room_id', as: 'room' });
     ChatMessage.belongsTo(models.User, { foreignKey: 'sender_user_id', as: 'sender' });
     ChatMessage.belongsTo(models.ChatMessage, { foreignKey: 'reply_to_id', as: 'reply_to' });
+    ChatMessage.hasMany(models.ChatAttachment, { foreignKey: 'message_id', as: 'attachments' });
   };
 
   return ChatMessage;

@@ -62,7 +62,13 @@ exports.getOrCreateTaskRoom = async (req, res, next) => {
 exports.sendMessage = async (req, res, next) => {
   try {
     const roomId = parseInt(req.params.id, 10);
-    const message = await ChatService.sendMessage(roomId, req.user, req.body, getIo());
+    const payload = {
+      body: req.body.body,
+      message_type: req.body.message_type,
+      reply_to_id: req.body.reply_to_id ? parseInt(req.body.reply_to_id, 10) : null,
+      file: req.file || null
+    };
+    const message = await ChatService.sendMessage(roomId, req.user, payload, getIo());
     return res.status(201).json({ success: true, data: message });
   } catch (err) {
     logger.error('chat.sendMessage', { err: err.message });
@@ -71,6 +77,86 @@ exports.sendMessage = async (req, res, next) => {
     }
     if (err.message.includes('required')) {
       return res.status(400).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.downloadAttachment = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.attachmentId, 10);
+    const inline = req.query.inline !== 'false';
+    await ChatService.streamAttachment(id, req.user, res, { inline });
+  } catch (err) {
+    logger.error('chat.downloadAttachment', { err: err.message });
+    if (err.message === 'Attachment not found' || err.message === 'File missing on disk') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    if (err.message === 'Not a member of this room') {
+      return res.status(403).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.createGroupRoom = async (req, res, next) => {
+  try {
+    const room = await ChatService.createGroupRoom(req.user, req.body);
+    return res.status(201).json({ success: true, data: room });
+  } catch (err) {
+    logger.error('chat.createGroupRoom', { err: err.message });
+    if (err.message.includes('required') || err.message.includes('at least')) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.listMembers = async (req, res, next) => {
+  try {
+    const roomId = parseInt(req.params.id, 10);
+    const members = await ChatService.listMembers(roomId, req.user);
+    return res.status(200).json({ success: true, data: members });
+  } catch (err) {
+    logger.error('chat.listMembers', { err: err.message });
+    if (err.message === 'Not a member of this room') {
+      return res.status(403).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.addMember = async (req, res, next) => {
+  try {
+    const roomId = parseInt(req.params.id, 10);
+    const userId = parseInt(req.body.user_id, 10);
+    const member = await ChatService.addMember(roomId, req.user, userId, getIo());
+    return res.status(200).json({ success: true, data: member });
+  } catch (err) {
+    logger.error('chat.addMember', { err: err.message });
+    if (err.message === 'Room not found') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    if (err.message.includes('Not a member') || err.message.includes('Cannot modify')) {
+      return res.status(403).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.removeMember = async (req, res, next) => {
+  try {
+    const roomId = parseInt(req.params.id, 10);
+    const userId = parseInt(req.params.userId, 10);
+    await ChatService.removeMember(roomId, req.user, userId, getIo());
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    logger.error('chat.removeMember', { err: err.message });
+    if (err.message === 'Room not found') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    if (err.message.includes('Cannot modify') || err.message.includes('Only the creator')) {
+      return res.status(403).json({ success: false, message: err.message });
     }
     next(err);
   }

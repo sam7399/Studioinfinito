@@ -38,6 +38,46 @@ class ChatMember {
       );
 }
 
+class ChatReplyPreview {
+  final int id;
+  final String body;
+  final int senderUserId;
+
+  ChatReplyPreview({required this.id, required this.body, required this.senderUserId});
+
+  factory ChatReplyPreview.fromJson(Map<String, dynamic> j) => ChatReplyPreview(
+        id: j['id'] as int,
+        body: (j['body'] as String?) ?? '',
+        senderUserId: (j['sender_user_id'] as int?) ?? 0,
+      );
+}
+
+class ChatAttachment {
+  final int id;
+  final int messageId;
+  final String originalName;
+  final String mimeType;
+  final int? fileSize;
+
+  ChatAttachment({
+    required this.id,
+    required this.messageId,
+    required this.originalName,
+    required this.mimeType,
+    this.fileSize,
+  });
+
+  bool get isImage => mimeType.startsWith('image/');
+
+  factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
+        id: j['id'] as int,
+        messageId: j['message_id'] as int,
+        originalName: (j['original_name'] as String?) ?? 'file',
+        mimeType: (j['mime_type'] as String?) ?? 'application/octet-stream',
+        fileSize: (j['file_size'] as num?)?.toInt(),
+      );
+}
+
 class ChatMessage {
   final int id;
   final int roomId;
@@ -45,10 +85,12 @@ class ChatMessage {
   final String body;
   final String messageType;
   final int? replyToId;
+  final ChatReplyPreview? replyTo;
   final DateTime? editedAt;
   final DateTime? deletedAt;
   final DateTime createdAt;
   final ChatUser? sender;
+  final List<ChatAttachment> attachments;
 
   ChatMessage({
     required this.id,
@@ -57,10 +99,12 @@ class ChatMessage {
     required this.body,
     required this.messageType,
     this.replyToId,
+    this.replyTo,
     this.editedAt,
     this.deletedAt,
     required this.createdAt,
     this.sender,
+    this.attachments = const [],
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -70,10 +114,16 @@ class ChatMessage {
         body: (j['body'] as String?) ?? '',
         messageType: (j['message_type'] as String?) ?? 'text',
         replyToId: j['reply_to_id'] as int?,
+        replyTo: j['reply_to'] != null
+            ? ChatReplyPreview.fromJson(Map<String, dynamic>.from(j['reply_to']))
+            : null,
         editedAt: j['edited_at'] != null ? DateTime.tryParse(j['edited_at'].toString()) : null,
         deletedAt: j['deleted_at'] != null ? DateTime.tryParse(j['deleted_at'].toString()) : null,
         createdAt: DateTime.parse(j['created_at']?.toString() ?? DateTime.now().toIso8601String()),
         sender: j['sender'] != null ? ChatUser.fromJson(Map<String, dynamic>.from(j['sender'])) : null,
+        attachments: ((j['attachments'] as List?) ?? [])
+            .map((a) => ChatAttachment.fromJson(Map<String, dynamic>.from(a as Map)))
+            .toList(),
       );
 }
 

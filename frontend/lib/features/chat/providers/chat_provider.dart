@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../core/networking/dio_client.dart';
@@ -71,6 +72,12 @@ class ChatRoomsNotifier extends Notifier<ChatRoomsState> {
     await refresh();
     return room;
   }
+
+  Future<ChatRoom> createGroup(String name, List<int> memberIds) async {
+    final room = await _service.createGroup(name, memberIds);
+    await refresh();
+    return room;
+  }
 }
 
 final chatRoomsProvider =
@@ -117,6 +124,7 @@ class ChatRoomState {
   final bool sending;
   final String? error;
   final Set<int> typingUserIds;
+  final ChatMessage? replyTarget;
 
   const ChatRoomState({
     this.messages = const [],
@@ -124,6 +132,7 @@ class ChatRoomState {
     this.sending = false,
     this.error,
     this.typingUserIds = const {},
+    this.replyTarget,
   });
 
   ChatRoomState copyWith({
@@ -132,6 +141,8 @@ class ChatRoomState {
     bool? sending,
     String? error,
     Set<int>? typingUserIds,
+    ChatMessage? replyTarget,
+    bool clearReply = false,
   }) =>
       ChatRoomState(
         messages: messages ?? this.messages,
@@ -139,6 +150,7 @@ class ChatRoomState {
         sending: sending ?? this.sending,
         error: error,
         typingUserIds: typingUserIds ?? this.typingUserIds,
+        replyTarget: clearReply ? null : (replyTarget ?? this.replyTarget),
       );
 }
 
@@ -231,17 +243,25 @@ class ChatRoomNotifier extends Notifier<ChatRoomState> {
     }
   }
 
+  void setReplyTarget(ChatMessage? target) {
+    state = state.copyWith(replyTarget: target, clearReply: target == null);
+  }
+
   Future<void> send(String body) async {
     final trimmed = body.trim();
     if (trimmed.isEmpty || state.sending) return;
+    final replyId = state.replyTarget?.id;
     state = state.copyWith(sending: true, error: null);
     try {
-      final msg = await _service.sendMessage(roomId, trimmed);
-      // Optimistically add (socket may also dispatch — de-dupe via id check)
+      final msg = await _service.sendMessage(roomId, trimmed, replyToId: replyId);
       if (!state.messages.any((m) => m.id == msg.id)) {
-        state = state.copyWith(messages: [...state.messages, msg], sending: false);
+        state = state.copyWith(
+          messages: [...state.messages, msg],
+          sending: false,
+          clearReply: true,
+        );
       } else {
-        state = state.copyWith(sending: false);
+        state = state.copyWith(sending: false, clearReply: true);
       }
     } on DioException catch (e) {
       state = state.copyWith(
@@ -252,6 +272,39 @@ class ChatRoomNotifier extends Notifier<ChatRoomState> {
   }
 
   void emitTyping(bool typing) => _socket.emitTyping(roomId, typing);
+
+  Future<void> sendWithAttachment({
+    required Uint8List bytes,
+    required String filename,
+    String? caption,
+  }) async {
+    if (state.sending) return;
+    final replyId = state.replyTarget?.id;
+    state = state.copyWith(sending: true, error: null);
+    try {
+      final msg = await _service.sendWithAttachment(
+        roomId: roomId,
+        bytes: bytes,
+        filename: filename,
+        caption: caption,
+        replyToId: replyId,
+      );
+      if (!state.messages.any((m) => m.id == msg.id)) {
+        state = state.copyWith(
+          messages: [...state.messages, msg],
+          sending: false,
+          clearReply: true,
+        );
+      } else {
+        state = state.copyWith(sending: false, clearReply: true);
+      }
+    } on DioException catch (e) {
+      state = state.copyWith(
+        sending: false,
+        error: e.response?.data?['message']?.toString() ?? 'Failed to upload',
+      );
+    }
+  }
 
   Future<void> deleteMessage(int messageId) async {
     try {
@@ -269,3 +322,130 @@ class ChatRoomNotifier extends Notifier<ChatRoomState> {
 final chatRoomProvider =
     NotifierProvider.family<ChatRoomNotifier, ChatRoomState, int>(
         (roomId) => ChatRoomNotifier(roomId));
+
+// ── Presence (online users) ─────────────────────────────────────────────────
+
+class ChatPresenceNotifier extends Notifier<Set<int>> {
+  void Function()? _dispose;
+
+  @override
+  Set<int> build() {
+    final socket = SocketService();
+    _dispose = socket.onPresence((data) {
+      final kind = data['kind'] as String?;
+      if (kind == 'snapshot') {
+        final list = (data['online'] as List?) ?? [];
+        state = list.map((e) => (e as num).toInt()).toSet();
+      } else if (kind == 'online') {
+        final uid = data['user_id'] as int?;
+        if (uid != null) state = {...state, uid};
+      } else if (kind == 'offline') {
+        final uid = data['user_id'] as int?;
+        if (uid != null) state = state.where((u) => u != uid).toSet();
+      }
+    });
+    ref.onDispose(() => _dispose?.call());
+    return const <int>{};
+  }
+}
+
+final chatPresenceProvider =
+    NotifierProvider<ChatPresenceNotifier, Set<int>>(() => ChatPresenceNotifier());
+
+bool isUserOnline(WidgetRef ref, int userId) =>
+    ref.watch(chatPresenceProvider).contains(userId);
+
+// ── Per-room read receipts (member last_read_at map) ────────────────────────
+
+class ChatRoomReadsNotifier extends Notifier<Map<int, DateTime?>> {
+  ChatRoomReadsNotifier(this.roomId);
+  final int roomId;
+  late final ChatService _service;
+  void Function()? _disposeRead;
+
+  @override
+  Map<int, DateTime?> build() {
+    _service = ref.watch(chatServiceProvider);
+    final socket = SocketService();
+    _disposeRead = socket.onChatRead((data) {
+      if ((data['room_id'] as int?) != roomId) return;
+      final uid = data['user_id'] as int?;
+      final at = data['read_at'] != null
+          ? DateTime.tryParse(data['read_at'].toString())
+          : null;
+      if (uid != null) state = {...state, uid: at};
+    });
+    ref.onDispose(() => _disposeRead?.call());
+    Future.microtask(refresh);
+    return const <int, DateTime?>{};
+  }
+
+  Future<void> refresh() async {
+    try {
+      final members = await _service.listMembers(roomId);
+      final map = <int, DateTime?>{};
+      for (final m in members) {
+        map[m.userId] = m.lastReadAt;
+      }
+      state = map;
+    } catch (_) {}
+  }
+}
+
+final chatRoomReadsProvider = NotifierProvider.family<ChatRoomReadsNotifier,
+    Map<int, DateTime?>, int>((roomId) => ChatRoomReadsNotifier(roomId));
+
+// ── Per-room members (for group info screen) ────────────────────────────────
+
+class ChatMembersState {
+  final List<ChatMember> members;
+  final bool loading;
+  final String? error;
+  const ChatMembersState({this.members = const [], this.loading = false, this.error});
+
+  ChatMembersState copyWith({List<ChatMember>? members, bool? loading, String? error}) =>
+      ChatMembersState(
+        members: members ?? this.members,
+        loading: loading ?? this.loading,
+        error: error,
+      );
+}
+
+class ChatMembersNotifier extends Notifier<ChatMembersState> {
+  ChatMembersNotifier(this.roomId);
+  final int roomId;
+  late final ChatService _service;
+
+  @override
+  ChatMembersState build() {
+    _service = ref.watch(chatServiceProvider);
+    Future.microtask(refresh);
+    return const ChatMembersState();
+  }
+
+  Future<void> refresh() async {
+    state = state.copyWith(loading: true, error: null);
+    try {
+      final members = await _service.listMembers(roomId);
+      state = state.copyWith(members: members, loading: false);
+    } on DioException catch (e) {
+      state = state.copyWith(
+        loading: false,
+        error: e.response?.data?['message']?.toString() ?? 'Failed to load members',
+      );
+    }
+  }
+
+  Future<void> addMember(int userId) async {
+    await _service.addMember(roomId, userId);
+    await refresh();
+  }
+
+  Future<void> removeMember(int userId) async {
+    await _service.removeMember(roomId, userId);
+    await refresh();
+  }
+}
+
+final chatMembersProvider = NotifierProvider.family<ChatMembersNotifier,
+    ChatMembersState, int>((roomId) => ChatMembersNotifier(roomId));

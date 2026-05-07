@@ -1,10 +1,22 @@
+import 'dart:js_interop';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:web/web.dart' as web;
 import '../../../core/constants/api_constants.dart';
+import '../../../core/networking/token_service.dart';
 import '../models/chat_models.dart';
 
 class ChatService {
   final Dio _dio;
   ChatService(this._dio);
+
+  String attachmentUrl(int attachmentId) =>
+      '${ApiConstants.baseUrl}${ApiConstants.chatAttachmentById(attachmentId)}';
+
+  Map<String, String> authHeaders() {
+    final t = TokenService.instance.token;
+    return t == null ? {} : {'Authorization': 'Bearer $t'};
+  }
 
   Future<List<ChatRoom>> listRooms() async {
     final res = await _dio.get(ApiConstants.chatRooms);
@@ -62,5 +74,69 @@ class ChatService {
 
   Future<void> deleteMessage(int messageId) async {
     await _dio.delete(ApiConstants.chatMessageById(messageId));
+  }
+
+  Future<ChatMessage> sendWithAttachment({
+    required int roomId,
+    required Uint8List bytes,
+    required String filename,
+    String? caption,
+    int? replyToId,
+  }) async {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+      if (caption != null && caption.isNotEmpty) 'body': caption,
+      if (replyToId != null) 'reply_to_id': replyToId.toString(),
+    });
+    final res = await _dio.post(
+      ApiConstants.chatRoomMessagesUpload(roomId),
+      data: form,
+    );
+    return ChatMessage.fromJson(Map<String, dynamic>.from(res.data['data'] as Map));
+  }
+
+  /// Trigger a browser download for an attachment.
+  /// Uses Dio (so the auth header is sent) and creates a Blob link.
+  Future<void> openAttachment(int attachmentId, String filename) async {
+    final res = await _dio.get<List<int>>(
+      ApiConstants.chatAttachmentById(attachmentId),
+      queryParameters: {'inline': 'false'},
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final bytes = res.data ?? const <int>[];
+    final blob = web.Blob(
+      [Uint8List.fromList(bytes).toJS].toJS,
+      web.BlobPropertyBag(type: 'application/octet-stream'),
+    );
+    final url = web.URL.createObjectURL(blob);
+    (web.document.createElement('a') as web.HTMLAnchorElement)
+      ..href = url
+      ..setAttribute('download', filename)
+      ..click();
+    web.URL.revokeObjectURL(url);
+  }
+
+  Future<ChatRoom> createGroup(String name, List<int> memberIds) async {
+    final res = await _dio.post(
+      ApiConstants.chatGroupRoom,
+      data: {'name': name, 'member_ids': memberIds},
+    );
+    return ChatRoom.fromJson(Map<String, dynamic>.from(res.data['data'] as Map));
+  }
+
+  Future<List<ChatMember>> listMembers(int roomId) async {
+    final res = await _dio.get(ApiConstants.chatRoomMembers(roomId));
+    final list = (res.data['data'] as List?) ?? [];
+    return list
+        .map((j) => ChatMember.fromJson(Map<String, dynamic>.from(j as Map)))
+        .toList();
+  }
+
+  Future<void> addMember(int roomId, int userId) async {
+    await _dio.post(ApiConstants.chatRoomMembers(roomId), data: {'user_id': userId});
+  }
+
+  Future<void> removeMember(int roomId, int userId) async {
+    await _dio.delete(ApiConstants.chatRoomMemberById(roomId, userId));
   }
 }

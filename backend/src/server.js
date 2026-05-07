@@ -212,6 +212,26 @@ async function ensureSchema() {
       logger.info('[schema] Created table chat_messages');
     }
 
+    if (!tables.includes('chat_attachments')) {
+      await sequelize.query(`
+        CREATE TABLE chat_attachments (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          message_id INT NOT NULL,
+          uploaded_by_user_id INT NOT NULL,
+          original_name VARCHAR(255) NOT NULL,
+          stored_name VARCHAR(255) NOT NULL,
+          mime_type VARCHAR(100) NULL,
+          file_size INT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_chatatt_msg FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT fk_chatatt_user FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+          KEY ca_message_idx (message_id)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      logger.info('[schema] Created table chat_attachments');
+    }
+
     if (!tables.includes('user_locations')) {
       await sequelize.query(`
         CREATE TABLE user_locations (

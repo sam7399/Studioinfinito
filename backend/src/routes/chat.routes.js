@@ -1,6 +1,7 @@
 const express = require('express');
 const { celebrate, Joi, Segments } = require('celebrate');
 const { authenticate } = require('../middleware/auth');
+const upload = require('../config/multer');
 const chatController = require('../controllers/chatController');
 
 const router = express.Router();
@@ -48,7 +49,7 @@ router.get(
   chatController.getMessages
 );
 
-// Send a message
+// Send a message (text only)
 router.post(
   '/rooms/:id/messages',
   celebrate({
@@ -60,6 +61,63 @@ router.post(
     })
   }),
   chatController.sendMessage
+);
+
+// Send a message with a file (multipart). Body fields are validated inside controller
+// so we don't run celebrate on the form-data body (which would clash with multer).
+router.post(
+  '/rooms/:id/messages/upload',
+  upload.single('file'),
+  chatController.sendMessage
+);
+
+// Download / inline-view an attachment
+router.get(
+  '/attachments/:attachmentId',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ attachmentId: Joi.number().integer().required() })
+  }),
+  chatController.downloadAttachment
+);
+
+// Group rooms
+router.post(
+  '/rooms/group',
+  celebrate({
+    [Segments.BODY]: Joi.object({
+      name: Joi.string().required().max(255),
+      member_ids: Joi.array().items(Joi.number().integer()).min(1).required()
+    })
+  }),
+  chatController.createGroupRoom
+);
+
+router.get(
+  '/rooms/:id/members',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ id: Joi.number().integer().required() })
+  }),
+  chatController.listMembers
+);
+
+router.post(
+  '/rooms/:id/members',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ id: Joi.number().integer().required() }),
+    [Segments.BODY]: Joi.object({ user_id: Joi.number().integer().required() })
+  }),
+  chatController.addMember
+);
+
+router.delete(
+  '/rooms/:id/members/:userId',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({
+      id: Joi.number().integer().required(),
+      userId: Joi.number().integer().required()
+    })
+  }),
+  chatController.removeMember
 );
 
 // Mark room as read

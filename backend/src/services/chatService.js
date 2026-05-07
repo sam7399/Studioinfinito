@@ -1,15 +1,24 @@
 const { Op } = require('sequelize');
+const fs = require('fs');
+const path = require('path');
 const {
   sequelize,
   ChatRoom,
   ChatRoomMember,
   ChatMessage,
+  ChatAttachment,
   User,
   Task
 } = require('../models');
 const logger = require('../utils/logger');
 
 const USER_ATTRS = ['id', 'name', 'email', 'role', 'department_id'];
+
+const MESSAGE_INCLUDES = [
+  { model: User, as: 'sender', attributes: ['id', 'name', 'role'] },
+  { model: ChatMessage, as: 'reply_to', attributes: ['id', 'body', 'sender_user_id'] },
+  { model: ChatAttachment, as: 'attachments' }
+];
 
 function emitToRoom(io, roomId, event, payload) {
   if (!io) return;
@@ -191,62 +200,181 @@ class ChatService {
       where,
       order: [['id', 'DESC']],
       limit: Math.min(parseInt(limit) || 50, 100),
-      include: [
-        { model: User, as: 'sender', attributes: ['id', 'name', 'role'] },
-        { model: ChatMessage, as: 'reply_to', attributes: ['id', 'body', 'sender_user_id'] }
-      ]
+      include: MESSAGE_INCLUDES
     });
 
     return messages.reverse().map(m => m.toJSON());
   }
 
   /**
-   * Send a message to a room.
+   * Send a message to a room. Optional `file` (multer object) creates an attachment.
    */
-  static async sendMessage(roomId, user, { body, message_type = 'text', reply_to_id = null }, io) {
+  static async sendMessage(roomId, user, { body = '', message_type = 'text', reply_to_id = null, file = null }, io) {
     await ensureMembership(roomId, user.id);
-    if (!body || !body.trim()) throw new Error('Message body is required');
 
-    const message = await ChatMessage.create({
-      room_id: roomId,
-      sender_user_id: user.id,
-      body: body.trim(),
-      message_type,
-      reply_to_id
-    });
+    const trimmed = (body || '').trim();
+    if (!file && !trimmed) throw new Error('Message body is required');
 
-    await ChatRoom.update({ last_message_at: message.created_at }, { where: { id: roomId } });
-    await ChatRoomMember.update(
-      { last_read_at: message.created_at },
-      { where: { room_id: roomId, user_id: user.id } }
-    );
+    const tx = await sequelize.transaction();
+    try {
+      const resolvedType = file
+        ? (file.mimetype && file.mimetype.startsWith('image/') ? 'image' : 'file')
+        : message_type;
 
-    const full = await ChatMessage.findByPk(message.id, {
-      include: [{ model: User, as: 'sender', attributes: ['id', 'name', 'role'] }]
-    });
-    const payload = full.toJSON();
+      const message = await ChatMessage.create({
+        room_id: roomId,
+        sender_user_id: user.id,
+        body: trimmed || (file ? file.originalname : ''),
+        message_type: resolvedType,
+        reply_to_id
+      }, { transaction: tx });
 
-    emitToRoom(io, roomId, 'chat:message_new', payload);
-
-    // Notify each member's personal room so list view updates even if not in room
-    const members = await ChatRoomMember.findAll({ where: { room_id: roomId } });
-    if (io) {
-      for (const m of members) {
-        io.to(`user:${m.user_id}`).emit('chat:room_updated', {
-          room_id: roomId,
-          last_message: payload
-        });
+      if (file) {
+        await ChatAttachment.create({
+          message_id: message.id,
+          uploaded_by_user_id: user.id,
+          original_name: file.originalname,
+          stored_name: file.filename,
+          mime_type: file.mimetype || null,
+          file_size: file.size || null
+        }, { transaction: tx });
       }
-    }
 
-    return payload;
+      await ChatRoom.update(
+        { last_message_at: message.created_at },
+        { where: { id: roomId }, transaction: tx }
+      );
+      await ChatRoomMember.update(
+        { last_read_at: message.created_at },
+        { where: { room_id: roomId, user_id: user.id }, transaction: tx }
+      );
+
+      await tx.commit();
+
+      const full = await ChatMessage.findByPk(message.id, { include: MESSAGE_INCLUDES });
+      const payload = full.toJSON();
+
+      emitToRoom(io, roomId, 'chat:message_new', payload);
+
+      const members = await ChatRoomMember.findAll({ where: { room_id: roomId } });
+      if (io) {
+        for (const m of members) {
+          io.to(`user:${m.user_id}`).emit('chat:room_updated', {
+            room_id: roomId,
+            last_message: payload
+          });
+        }
+      }
+
+      return payload;
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+  }
+
+  /**
+   * Stream an attachment to the response. Caller must be a room member.
+   */
+  static async streamAttachment(attachmentId, user, res, { inline = true } = {}) {
+    const att = await ChatAttachment.findByPk(attachmentId, {
+      include: [{ model: ChatMessage, as: 'message', attributes: ['id', 'room_id'] }]
+    });
+    if (!att) throw new Error('Attachment not found');
+
+    const member = await ChatRoomMember.findOne({
+      where: { room_id: att.message.room_id, user_id: user.id }
+    });
+    if (!member) throw new Error('Not a member of this room');
+
+    const filePath = path.join(__dirname, '../../uploads/tasks', att.stored_name);
+    if (!fs.existsSync(filePath)) throw new Error('File missing on disk');
+
+    res.setHeader('Content-Type', att.mime_type || 'application/octet-stream');
+    const disp = inline ? 'inline' : 'attachment';
+    res.setHeader(
+      'Content-Disposition',
+      `${disp}; filename="${encodeURIComponent(att.original_name)}"`
+    );
+    fs.createReadStream(filePath).pipe(res);
+  }
+
+  // ── Group rooms ───────────────────────────────────────────────────────────
+
+  static async createGroupRoom(user, { name, member_ids }) {
+    if (!name || !name.trim()) throw new Error('Group name is required');
+    const ids = new Set([...member_ids, user.id].map(Number));
+    if (ids.size < 2) throw new Error('A group needs at least 2 members');
+
+    const tx = await sequelize.transaction();
+    try {
+      const room = await ChatRoom.create({
+        type: 'group',
+        name: name.trim(),
+        created_by_user_id: user.id,
+        last_message_at: new Date()
+      }, { transaction: tx });
+
+      const rows = [...ids].map(uid => ({ room_id: room.id, user_id: uid }));
+      await ChatRoomMember.bulkCreate(rows, { transaction: tx });
+      await tx.commit();
+      return attachMembers(room);
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+  }
+
+  static async listMembers(roomId, user) {
+    await ensureMembership(roomId, user.id);
+    const members = await ChatRoomMember.findAll({
+      where: { room_id: roomId },
+      include: [{ model: User, as: 'user', attributes: USER_ATTRS }]
+    });
+    return members.map(m => m.toJSON());
+  }
+
+  static async addMember(roomId, user, targetUserId, io) {
+    const room = await ChatRoom.findByPk(roomId);
+    if (!room) throw new Error('Room not found');
+    if (room.type === 'direct') throw new Error('Cannot modify direct rooms');
+    await ensureMembership(roomId, user.id);
+
+    const existing = await ChatRoomMember.findOne({
+      where: { room_id: roomId, user_id: targetUserId }
+    });
+    if (existing) return existing.toJSON();
+
+    const member = await ChatRoomMember.create({ room_id: roomId, user_id: targetUserId });
+    if (io) {
+      io.to(`user:${targetUserId}`).emit('chat:room_updated', { room_id: roomId });
+      emitToRoom(io, roomId, 'chat:member_added', { room_id: roomId, user_id: targetUserId });
+    }
+    return member.toJSON();
+  }
+
+  static async removeMember(roomId, user, targetUserId, io) {
+    const room = await ChatRoom.findByPk(roomId);
+    if (!room) throw new Error('Room not found');
+    if (room.type === 'direct') throw new Error('Cannot modify direct rooms');
+    if (room.created_by_user_id !== user.id && user.id !== targetUserId) {
+      throw new Error('Only the creator can remove other members');
+    }
+    await ChatRoomMember.destroy({ where: { room_id: roomId, user_id: targetUserId } });
+    if (io) {
+      emitToRoom(io, roomId, 'chat:member_removed', { room_id: roomId, user_id: targetUserId });
+      io.to(`user:${targetUserId}`).emit('chat:room_updated', { room_id: roomId });
+    }
+    return { success: true };
   }
 
   static async markRead(roomId, user, io) {
     const member = await ensureMembership(roomId, user.id);
     member.last_read_at = new Date();
     await member.save();
-    emitToRoom(io, roomId, 'chat:read', { room_id: roomId, user_id: user.id, read_at: member.last_read_at });
+    const payload = { room_id: roomId, user_id: user.id, read_at: member.last_read_at };
+    emitToRoom(io, roomId, 'chat:read', payload);
+    if (io) io.to(`user:${user.id}`).emit('chat:room_updated', { room_id: roomId });
     return { last_read_at: member.last_read_at };
   }
 

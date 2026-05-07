@@ -80,7 +80,7 @@ function initializeSocket(server) {
   io.on('connection', (socket) => {
     logger.info(`User connected - ID: ${socket.userId}, Socket ID: ${socket.id}`);
 
-    // Store user connection
+    const wasOnline = connectedUsers.has(socket.userId);
     connectedUsers.set(socket.userId, socket.id);
 
     // Join user to personal room (for private notifications)
@@ -96,12 +96,21 @@ function initializeSocket(server) {
       socket.join(`dept:${socket.user.department_id}`);
     }
 
+    // Send the current online list to this user (for chat presence dots)
+    socket.emit('presence:snapshot', { online: [...connectedUsers.keys()] });
+
+    // Broadcast that this user just came online (only on first session)
+    if (!wasOnline) {
+      socket.broadcast.emit('presence:online', { user_id: socket.userId });
+    }
+
     /**
      * Handle disconnection
      */
     socket.on('disconnect', () => {
       logger.info(`User disconnected - ID: ${socket.userId}, Socket ID: ${socket.id}`);
       connectedUsers.delete(socket.userId);
+      io.emit('presence:offline', { user_id: socket.userId });
     });
 
     /**

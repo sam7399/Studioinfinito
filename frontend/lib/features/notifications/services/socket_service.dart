@@ -43,6 +43,7 @@ class SocketService {
   final List<OnDataChangeCallback> _onChatReadCallbacks = [];
   final List<OnDataChangeCallback> _onChatMessageEditedCallbacks = [];
   final List<OnDataChangeCallback> _onChatMessageDeletedCallbacks = [];
+  final List<OnDataChangeCallback> _onPresenceCallbacks = [];
 
   // ── Connection state ───────────────────────────────────────────────────
   bool _isConnected = false;
@@ -229,6 +230,22 @@ class SocketService {
     socket.on('chat:message_edited', (data) => _dispatch(_onChatMessageEditedCallbacks, data));
     socket.on('chat:message_deleted', (data) => _dispatch(_onChatMessageDeletedCallbacks, data));
 
+    // Presence (online/offline) — wrap in a payload tagged with kind
+    socket.on('presence:snapshot', (data) {
+      final list = data is Map && data['online'] is List
+          ? List<int>.from(((data as Map)['online'] as List).map((e) => (e as num).toInt()))
+          : <int>[];
+      _dispatch(_onPresenceCallbacks, {'kind': 'snapshot', 'online': list});
+    });
+    socket.on('presence:online', (data) {
+      final uid = data is Map ? (data['user_id'] as num?)?.toInt() : null;
+      if (uid != null) _dispatch(_onPresenceCallbacks, {'kind': 'online', 'user_id': uid});
+    });
+    socket.on('presence:offline', (data) {
+      final uid = data is Map ? (data['user_id'] as num?)?.toInt() : null;
+      if (uid != null) _dispatch(_onPresenceCallbacks, {'kind': 'offline', 'user_id': uid});
+    });
+
     // ── Error handling ───────────────────────────────────────────────────
     socket.on('error', (error) {
       _logger.e('Socket error: $error');
@@ -279,6 +296,11 @@ class SocketService {
   void Function() onChatMessageDeleted(OnDataChangeCallback cb) {
     _onChatMessageDeletedCallbacks.add(cb);
     return () => _onChatMessageDeletedCallbacks.remove(cb);
+  }
+
+  void Function() onPresence(OnDataChangeCallback cb) {
+    _onPresenceCallbacks.add(cb);
+    return () => _onPresenceCallbacks.remove(cb);
   }
 
   void _handleNotificationEvent(dynamic data) {
@@ -494,6 +516,7 @@ class SocketService {
       _onChatReadCallbacks.clear();
       _onChatMessageEditedCallbacks.clear();
       _onChatMessageDeletedCallbacks.clear();
+      _onPresenceCallbacks.clear();
       _onPollTick = null;
       _logger.i('Socket service disposed');
     } catch (e, stackTrace) {
