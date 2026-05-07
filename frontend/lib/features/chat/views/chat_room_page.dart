@@ -7,6 +7,9 @@ import 'package:intl/intl.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../models/chat_models.dart';
 import '../providers/chat_provider.dart';
+import '../services/call_service.dart';
+import '../services/voice_recorder.dart';
+import 'voice_message_player.dart';
 
 class ChatRoomPage extends ConsumerStatefulWidget {
   final int roomId;
@@ -23,13 +26,58 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
   Timer? _typingTimer;
   bool _emittedTyping = false;
 
+  final VoiceRecorder _recorder = VoiceRecorder();
+  bool _recording = false;
+  Timer? _recordTicker;
+  Duration _recordElapsed = Duration.zero;
+
   @override
   void dispose() {
     _typingTimer?.cancel();
+    _recordTicker?.cancel();
+    _recorder.cancel();
     _ctrl.dispose();
     _scroll.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      await _recorder.start();
+      _recordElapsed = Duration.zero;
+      setState(() => _recording = true);
+      _recordTicker = Timer.periodic(const Duration(milliseconds: 200), (_) {
+        if (!_recording) return;
+        setState(() => _recordElapsed = _recorder.elapsed);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Microphone access denied: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopRecordingAndSend() async {
+    _recordTicker?.cancel();
+    setState(() => _recording = false);
+    final bytes = await _recorder.stop();
+    if (bytes == null || bytes.isEmpty) return;
+    await ref
+        .read(chatRoomProvider(widget.roomId).notifier)
+        .sendWithAttachment(
+          bytes: bytes,
+          filename: 'voice.webm',
+        );
+    _scrollToBottom();
+  }
+
+  void _cancelRecording() {
+    _recordTicker?.cancel();
+    setState(() => _recording = false);
+    _recorder.cancel();
   }
 
   void _onTextChanged(String _) {
@@ -131,6 +179,109 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
         );
       }
     }
+  }
+
+  Widget _buildComposer(ChatRoomState state) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.attach_file, size: 20),
+          color: Colors.grey.shade600,
+          onPressed: state.sending ? null : _attachFile,
+          tooltip: 'Attach file',
+        ),
+        Expanded(
+          child: TextField(
+            controller: _ctrl,
+            focusNode: _focus,
+            minLines: 1,
+            maxLines: 5,
+            onChanged: _onTextChanged,
+            onSubmitted: (_) => _send(),
+            textInputAction: TextInputAction.send,
+            decoration: InputDecoration(
+              hintText: 'Type a message...',
+              filled: true,
+              fillColor: const Color(0xFFF1F5F9),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(22),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 10),
+              isDense: true,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        if (_ctrl.text.trim().isEmpty)
+          IconButton(
+            icon: const Icon(Icons.mic, size: 20),
+            color: const Color(0xFFE65C00),
+            tooltip: 'Voice message',
+            onPressed: state.sending ? null : _startRecording,
+          )
+        else
+          IconButton.filled(
+            onPressed: state.sending ? null : _send,
+            icon: state.sending
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.send_rounded, size: 18),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFE65C00),
+              foregroundColor: Colors.white,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRecordingBar() {
+    final m = _recordElapsed.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = _recordElapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.delete_outline, color: Colors.red),
+          tooltip: 'Cancel',
+          onPressed: _cancelRecording,
+        ),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Row(
+              children: [
+                _PulsingDot(),
+                const SizedBox(width: 10),
+                Text('Recording  $m:$s',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade700)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        IconButton.filled(
+          icon: const Icon(Icons.send_rounded, size: 18),
+          onPressed: _stopRecordingAndSend,
+          style: IconButton.styleFrom(
+            backgroundColor: const Color(0xFFE65C00),
+            foregroundColor: Colors.white,
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _attachFile() async {
@@ -276,6 +427,42 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
           ],
         ),
         actions: [
+          if (room?.type == 'direct') ...[
+            IconButton(
+              icon: const Icon(Icons.call, size: 18),
+              tooltip: 'Voice call',
+              onPressed: () {
+                final other = room!.members
+                    .where((m) => m.userId != currentUserId)
+                    .toList()
+                    .firstOrNull;
+                if (other == null) return;
+                CallService.instance.startCall(
+                  peerUserId: other.userId,
+                  peerName: other.user?.name ?? 'User',
+                  roomId: room.id,
+                  media: 'audio',
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.videocam, size: 18),
+              tooltip: 'Video call',
+              onPressed: () {
+                final other = room!.members
+                    .where((m) => m.userId != currentUserId)
+                    .toList()
+                    .firstOrNull;
+                if (other == null) return;
+                CallService.instance.startCall(
+                  peerUserId: other.userId,
+                  peerName: other.user?.name ?? 'User',
+                  roomId: room.id,
+                  media: 'video',
+                );
+              },
+            ),
+          ],
           if (room?.type == 'task' && room?.taskId != null)
             IconButton(
               icon: const Icon(Icons.open_in_new, size: 18),
@@ -451,55 +638,7 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
           Container(
             padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
             color: Colors.white,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.attach_file, size: 20),
-                  color: Colors.grey.shade600,
-                  onPressed: state.sending ? null : _attachFile,
-                  tooltip: 'Attach file',
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _ctrl,
-                    focusNode: _focus,
-                    minLines: 1,
-                    maxLines: 5,
-                    onChanged: _onTextChanged,
-                    onSubmitted: (_) => _send(),
-                    textInputAction: TextInputAction.send,
-                    decoration: InputDecoration(
-                      hintText: 'Type a message...',
-                      filled: true,
-                      fillColor: const Color(0xFFF1F5F9),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(22),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                IconButton.filled(
-                  onPressed: state.sending ? null : _send,
-                  icon: state.sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.send_rounded, size: 18),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFE65C00),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
+            child: _recording ? _buildRecordingBar() : _buildComposer(state),
           ),
         ],
       ),
@@ -908,6 +1047,43 @@ class _ReactionPills extends StatelessWidget {
   }
 }
 
+class _PulsingDot extends StatefulWidget {
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _c,
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
 class _PinnedBanner extends ConsumerWidget {
   final int roomId;
   final void Function(int messageId) scrollTo;
@@ -995,6 +1171,14 @@ class _AttachmentTile extends ConsumerWidget {
             );
           },
         ),
+      );
+    }
+
+    if (attachment.isAudio) {
+      return VoiceMessagePlayer(
+        isMine: isMine,
+        title: attachment.originalName == 'voice.webm' ? 'Voice message' : attachment.originalName,
+        fetchBytes: () => svc.fetchAttachmentBytes(attachment.id),
       );
     }
 

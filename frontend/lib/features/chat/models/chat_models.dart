@@ -68,6 +68,7 @@ class ChatAttachment {
   });
 
   bool get isImage => mimeType.startsWith('image/');
+  bool get isAudio => mimeType.startsWith('audio/');
 
   factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
         id: j['id'] as int,

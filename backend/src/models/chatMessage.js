@@ -20,7 +20,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     message_type: {
-      type: DataTypes.ENUM('text', 'image', 'file', 'system'),
+      type: DataTypes.ENUM('text', 'image', 'file', 'audio', 'system'),
       allowNull: false,
       defaultValue: 'text'
     },

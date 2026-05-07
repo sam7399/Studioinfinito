@@ -220,7 +220,11 @@ class ChatService {
     const tx = await sequelize.transaction();
     try {
       const resolvedType = file
-        ? (file.mimetype && file.mimetype.startsWith('image/') ? 'image' : 'file')
+        ? (file.mimetype && file.mimetype.startsWith('image/')
+            ? 'image'
+            : (file.mimetype && file.mimetype.startsWith('audio/')
+                ? 'audio'
+                : 'file'))
         : message_type;
 
       const message = await ChatMessage.create({

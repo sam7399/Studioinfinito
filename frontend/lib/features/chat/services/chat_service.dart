@@ -95,6 +95,15 @@ class ChatService {
     return ChatMessage.fromJson(Map<String, dynamic>.from(res.data['data'] as Map));
   }
 
+  /// Fetch raw bytes of an attachment (Dio sends auth header).
+  Future<Uint8List> fetchAttachmentBytes(int attachmentId) async {
+    final res = await _dio.get<List<int>>(
+      ApiConstants.chatAttachmentById(attachmentId),
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(res.data ?? const <int>[]);
+  }
+
   /// Trigger a browser download for an attachment.
   /// Uses Dio (so the auth header is sent) and creates a Blob link.
   Future<void> openAttachment(int attachmentId, String filename) async {

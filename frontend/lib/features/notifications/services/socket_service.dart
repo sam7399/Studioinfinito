@@ -46,6 +46,7 @@ class SocketService {
   final List<OnDataChangeCallback> _onChatReactionCallbacks = [];
   final List<OnDataChangeCallback> _onChatPinCallbacks = [];
   final List<OnDataChangeCallback> _onPresenceCallbacks = [];
+  final List<OnDataChangeCallback> _onCallSignalCallbacks = [];
 
   // ── Connection state ───────────────────────────────────────────────────
   bool _isConnected = false;
@@ -259,6 +260,24 @@ class SocketService {
       if (uid != null) _dispatch(_onPresenceCallbacks, {'kind': 'offline', 'user_id': uid});
     });
 
+    // Call signaling — wrap each event with a _kind tag and dispatch to one handler list.
+    for (final ev in const [
+      'call:invite',
+      'call:accept',
+      'call:reject',
+      'call:end',
+      'call:offer',
+      'call:answer',
+      'call:ice',
+    ]) {
+      final kind = ev.split(':').last;
+      socket.on(ev, (data) {
+        final m = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+        m['_kind'] = kind;
+        _dispatch(_onCallSignalCallbacks, m);
+      });
+    }
+
     // ── Error handling ───────────────────────────────────────────────────
     socket.on('error', (error) {
       _logger.e('Socket error: $error');
@@ -324,6 +343,11 @@ class SocketService {
   void Function() onChatPin(OnDataChangeCallback cb) {
     _onChatPinCallbacks.add(cb);
     return () => _onChatPinCallbacks.remove(cb);
+  }
+
+  void Function() onCallSignal(OnDataChangeCallback cb) {
+    _onCallSignalCallbacks.add(cb);
+    return () => _onCallSignalCallbacks.remove(cb);
   }
 
   void _handleNotificationEvent(dynamic data) {
@@ -542,6 +566,7 @@ class SocketService {
       _onChatReactionCallbacks.clear();
       _onChatPinCallbacks.clear();
       _onPresenceCallbacks.clear();
+      _onCallSignalCallbacks.clear();
       _onPollTick = null;
       _logger.i('Socket service disposed');
     } catch (e, stackTrace) {

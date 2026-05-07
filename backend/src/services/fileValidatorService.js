@@ -9,7 +9,8 @@ class FileValidatorService {
     'documents': 5 * 1024 * 1024,    // 5 MB
     'images': 10 * 1024 * 1024,       // 10 MB
     'videos': 50 * 1024 * 1024,       // 50 MB
-    'archives': 20 * 1024 * 1024      // 20 MB
+    'archives': 20 * 1024 * 1024,     // 20 MB
+    'audio': 25 * 1024 * 1024         // 25 MB
   };
 
   // Allowed file types by category
@@ -55,6 +56,18 @@ class FileValidatorService {
         'application/gzip'
       ],
       extensions: ['.zip', '.rar', '.7z', '.gz', '.tar']
+    },
+    'audio': {
+      mime: [
+        'audio/webm',
+        'audio/ogg',
+        'audio/mpeg',
+        'audio/mp4',
+        'audio/wav',
+        'audio/x-wav',
+        'audio/aac'
+      ],
+      extensions: ['.webm', '.ogg', '.mp3', '.m4a', '.wav', '.aac']
     }
   };
 

@@ -54,6 +54,9 @@ dependencies:
   # WASM-compatible web APIs (replaces dart:html)
   web: ^1.1.0
 
+  # WebRTC for voice/video calls
+  flutter_webrtc: ^1.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

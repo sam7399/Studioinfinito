@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/chat/services/call_service.dart';
+import 'features/chat/views/call_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +25,9 @@ class TaskManagerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
-    
+    // Force the call signaling service to wire up listeners on app start.
+    CallService.instance;
+
     return MaterialApp.router(
       title: dotenv.env['APP_NAME'] ?? 'TSI Task Manager',
       theme: AppTheme.lightTheme,
@@ -31,6 +35,7 @@ class TaskManagerApp extends ConsumerWidget {
       themeMode: ThemeMode.light,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => CallOverlay(child: child ?? const SizedBox()),
     );
   }
 }

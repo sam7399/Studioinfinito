@@ -227,6 +227,12 @@ async function ensureSchema() {
         await sequelize.query('ALTER TABLE chat_messages ADD COLUMN forwarded_from_message_id INT NULL');
         logger.info('[schema] Added column chat_messages.forwarded_from_message_id');
       }
+      // Extend message_type enum to include 'audio' for voice notes
+      try {
+        await sequelize.query(
+          "ALTER TABLE chat_messages MODIFY COLUMN message_type ENUM('text','image','file','audio','system') NOT NULL DEFAULT 'text'"
+        );
+      } catch (_) {}
     } catch (_) {}
 
     if (!tables.includes('chat_message_reactions')) {
