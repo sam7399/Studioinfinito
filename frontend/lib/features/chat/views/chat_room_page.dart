@@ -56,6 +56,83 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
     _scrollToBottom();
   }
 
+  Future<void> _showForwardDialog(int messageId) async {
+    final rooms = ref.read(chatRoomsProvider).rooms;
+    final currentUserId = ref.read(authProvider).user?.id ?? 0;
+    String search = '';
+    final target = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        final filtered = rooms
+            .where((r) =>
+                r.id != widget.roomId &&
+                r.displayName(currentUserId)
+                    .toLowerCase()
+                    .contains(search.toLowerCase()))
+            .toList();
+        return AlertDialog(
+          title: const Text('Forward to...'),
+          content: SizedBox(
+            width: 380,
+            height: 420,
+            child: Column(
+              children: [
+                TextField(
+                  autofocus: true,
+                  onChanged: (v) => setDlg(() => search = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search chats...',
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final r = filtered[i];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              const Color(0xFFE65C00).withOpacity(0.15),
+                          child: Icon(
+                            r.type == 'task'
+                                ? Icons.task_alt_outlined
+                                : r.type == 'group'
+                                    ? Icons.group_outlined
+                                    : Icons.person_outline,
+                            color: const Color(0xFFE65C00),
+                          ),
+                        ),
+                        title: Text(r.displayName(currentUserId)),
+                        onTap: () => Navigator.pop(ctx, r.id),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ],
+        );
+      }),
+    );
+    if (target != null) {
+      await ref
+          .read(chatRoomProvider(widget.roomId).notifier)
+          .forward(messageId, target);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Forwarded ✓')),
+        );
+      }
+    }
+  }
+
   Future<void> _attachFile() async {
     final res = await FilePicker.platform.pickFiles(
       withData: true,
@@ -215,6 +292,17 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
       ),
       body: Column(
         children: [
+          // Pinned banner
+          _PinnedBanner(roomId: widget.roomId, scrollTo: (id) {
+            final idx = state.messages.indexWhere((m) => m.id == id);
+            if (idx >= 0 && _scroll.hasClients) {
+              _scroll.animateTo(
+                (idx * 70.0).clamp(0.0, _scroll.position.maxScrollExtent),
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+              );
+            }
+          }),
           Expanded(
             child: state.loading && state.messages.isEmpty
                 ? const Center(child: CircularProgressIndicator())
@@ -250,6 +338,7 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
                             isMine: isMine,
                             showSenderName: showSender,
                             allMessages: state.messages,
+                            roomId: widget.roomId,
                             onDelete: isMine
                                 ? () => ref
                                     .read(chatRoomProvider(widget.roomId)
@@ -259,6 +348,13 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
                             onReply: () => ref
                                 .read(chatRoomProvider(widget.roomId).notifier)
                                 .setReplyTarget(msg),
+                            onForward: () => _showForwardDialog(msg.id),
+                            onTogglePin: () => ref
+                                .read(chatRoomProvider(widget.roomId).notifier)
+                                .togglePin(msg.id, !msg.isPinned),
+                            onReact: (emoji) => ref
+                                .read(chatRoomProvider(widget.roomId).notifier)
+                                .toggleReaction(msg.id, emoji),
                             onJumpTo: (targetId) {
                               final idx = state.messages
                                   .indexWhere((m) => m.id == targetId);
@@ -416,8 +512,12 @@ class _MessageBubble extends ConsumerWidget {
   final bool isMine;
   final bool showSenderName;
   final List<ChatMessage> allMessages;
+  final int roomId;
   final VoidCallback? onDelete;
   final VoidCallback? onReply;
+  final VoidCallback? onForward;
+  final VoidCallback? onTogglePin;
+  final void Function(String emoji)? onReact;
   final void Function(int targetId)? onJumpTo;
 
   const _MessageBubble({
@@ -425,8 +525,12 @@ class _MessageBubble extends ConsumerWidget {
     required this.isMine,
     required this.showSenderName,
     required this.allMessages,
+    required this.roomId,
     this.onDelete,
     this.onReply,
+    this.onForward,
+    this.onTogglePin,
+    this.onReact,
     this.onJumpTo,
   });
 
@@ -482,11 +586,50 @@ class _MessageBubble extends ConsumerWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Quick emoji row
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            child: Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceAround,
+                              children: ['👍', '❤️', '😂', '😮', '😢', '🎉']
+                                  .map((e) => InkWell(
+                                        onTap: () {
+                                          Navigator.pop(ctx);
+                                          onReact?.call(e);
+                                        },
+                                        child: Padding(
+                                          padding:
+                                              const EdgeInsets.all(8),
+                                          child: Text(e,
+                                              style:
+                                                  const TextStyle(fontSize: 22)),
+                                        ),
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                          const Divider(height: 1),
                           if (onReply != null)
                             ListTile(
                               leading: const Icon(Icons.reply),
                               title: const Text('Reply'),
                               onTap: () => Navigator.pop(ctx, 'reply'),
+                            ),
+                          if (onForward != null)
+                            ListTile(
+                              leading: const Icon(Icons.forward_outlined),
+                              title: const Text('Forward'),
+                              onTap: () => Navigator.pop(ctx, 'forward'),
+                            ),
+                          if (onTogglePin != null)
+                            ListTile(
+                              leading: Icon(message.isPinned
+                                  ? Icons.push_pin
+                                  : Icons.push_pin_outlined),
+                              title: Text(message.isPinned ? 'Unpin' : 'Pin'),
+                              onTap: () => Navigator.pop(ctx, 'pin'),
                             ),
                           if (onDelete != null)
                             ListTile(
@@ -506,6 +649,8 @@ class _MessageBubble extends ConsumerWidget {
                     ),
                   );
                   if (action == 'reply') onReply?.call();
+                  if (action == 'forward') onForward?.call();
+                  if (action == 'pin') onTogglePin?.call();
                   if (action == 'delete') {
                     final confirm = await showDialog<bool>(
                       context: context,
@@ -551,6 +696,30 @@ class _MessageBubble extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Forwarded label
+                      if (message.isForwarded)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.forward,
+                                  size: 11,
+                                  color: isMine
+                                      ? Colors.white70
+                                      : Colors.grey.shade500),
+                              const SizedBox(width: 4),
+                              Text('Forwarded',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontStyle: FontStyle.italic,
+                                      color: isMine
+                                          ? Colors.white70
+                                          : Colors.grey.shade500)),
+                            ],
+                          ),
+                        ),
+
                       // Quoted reply preview
                       if (message.replyTo != null)
                         InkWell(
@@ -615,6 +784,14 @@ class _MessageBubble extends ConsumerWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (message.isPinned) ...[
+                            Icon(Icons.push_pin,
+                                size: 10,
+                                color: isMine
+                                    ? Colors.white70
+                                    : Colors.grey.shade500),
+                            const SizedBox(width: 4),
+                          ],
                           if (message.editedAt != null) ...[
                             Text(
                               'edited',
@@ -652,6 +829,131 @@ class _MessageBubble extends ConsumerWidget {
                   ),
                 ),
               ),
+
+              // Reaction pills (under bubble)
+              if (message.reactions.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(
+                      top: 2,
+                      left: isMine ? 0 : 8,
+                      right: isMine ? 8 : 0),
+                  child: _ReactionPills(
+                    reactions: message.reactionsByEmoji(),
+                    currentUserId: ref.watch(authProvider).user?.id ?? 0,
+                    onTap: (emoji) => onReact?.call(emoji),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReactionPills extends StatelessWidget {
+  final Map<String, List<int>> reactions;
+  final int currentUserId;
+  final void Function(String emoji)? onTap;
+
+  const _ReactionPills({
+    required this.reactions,
+    required this.currentUserId,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      children: reactions.entries.map((e) {
+        final mine = e.value.contains(currentUserId);
+        return InkWell(
+          onTap: () => onTap?.call(e.key),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: mine
+                  ? const Color(0xFFE65C00).withOpacity(0.15)
+                  : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: mine
+                    ? const Color(0xFFE65C00).withOpacity(0.4)
+                    : Colors.grey.shade300,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(e.key, style: const TextStyle(fontSize: 12)),
+                const SizedBox(width: 3),
+                Text(
+                  '${e.value.length}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: mine
+                        ? const Color(0xFFE65C00)
+                        : Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _PinnedBanner extends ConsumerWidget {
+  final int roomId;
+  final void Function(int messageId) scrollTo;
+  const _PinnedBanner({required this.roomId, required this.scrollTo});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pinned = ref.watch(chatPinnedProvider(roomId));
+    if (pinned.isEmpty) return const SizedBox.shrink();
+    final first = pinned.first;
+    final hasMore = pinned.length > 1;
+    return Material(
+      color: const Color(0xFFFFF7ED),
+      child: InkWell(
+        onTap: () => scrollTo(first.id),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.push_pin, size: 14, color: Color(0xFFE65C00)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      hasMore
+                          ? 'Pinned · ${pinned.length} messages'
+                          : 'Pinned message',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFE65C00)),
+                    ),
+                    Text(
+                      first.body.isNotEmpty ? first.body : '[attachment]',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade800),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade500),
             ],
           ),
         ),

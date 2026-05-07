@@ -139,4 +139,54 @@ class ChatService {
   Future<void> removeMember(int roomId, int userId) async {
     await _dio.delete(ApiConstants.chatRoomMemberById(roomId, userId));
   }
+
+  Future<List<ChatReaction>> toggleReaction(int messageId, String emoji) async {
+    final res = await _dio.post(
+      ApiConstants.chatMessageReactions(messageId),
+      data: {'emoji': emoji},
+    );
+    final list = (res.data['data']?['reactions'] as List?) ?? [];
+    return list
+        .map((r) => ChatReaction.fromJson(Map<String, dynamic>.from(r as Map)))
+        .toList();
+  }
+
+  Future<ChatMessage> pinMessage(int messageId) async {
+    final res = await _dio.post(ApiConstants.chatMessagePin(messageId));
+    return ChatMessage.fromJson(Map<String, dynamic>.from(res.data['data'] as Map));
+  }
+
+  Future<ChatMessage> unpinMessage(int messageId) async {
+    final res = await _dio.delete(ApiConstants.chatMessagePin(messageId));
+    return ChatMessage.fromJson(Map<String, dynamic>.from(res.data['data'] as Map));
+  }
+
+  Future<List<ChatMessage>> listPinned(int roomId) async {
+    final res = await _dio.get(ApiConstants.chatRoomPinned(roomId));
+    final list = (res.data['data'] as List?) ?? [];
+    return list
+        .map((j) => ChatMessage.fromJson(Map<String, dynamic>.from(j as Map)))
+        .toList();
+  }
+
+  Future<ChatMessage> forwardMessage(int messageId, int targetRoomId) async {
+    final res = await _dio.post(
+      ApiConstants.chatMessageForward(messageId),
+      data: {'room_id': targetRoomId},
+    );
+    return ChatMessage.fromJson(Map<String, dynamic>.from(res.data['data'] as Map));
+  }
+
+  Future<List<Map<String, dynamic>>> search(String query, {int? roomId, int limit = 30}) async {
+    final res = await _dio.get(
+      ApiConstants.chatSearch,
+      queryParameters: {
+        'q': query,
+        if (roomId != null) 'room_id': roomId,
+        'limit': limit,
+      },
+    );
+    final list = (res.data['data'] as List?) ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
 }

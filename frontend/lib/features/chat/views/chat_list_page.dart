@@ -46,6 +46,11 @@ class ChatListPage extends ConsumerWidget {
                   ),
                 ),
                 IconButton(
+                  onPressed: () => context.go('/chat/search'),
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Search messages',
+                ),
+                IconButton(
                   onPressed: () => ref.read(chatRoomsProvider.notifier).refresh(),
                   icon: const Icon(Icons.refresh),
                   tooltip: 'Refresh',

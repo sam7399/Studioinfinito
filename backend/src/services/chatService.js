@@ -7,6 +7,7 @@ const {
   ChatRoomMember,
   ChatMessage,
   ChatAttachment,
+  ChatMessageReaction,
   User,
   Task
 } = require('../models');
@@ -17,7 +18,8 @@ const USER_ATTRS = ['id', 'name', 'email', 'role', 'department_id'];
 const MESSAGE_INCLUDES = [
   { model: User, as: 'sender', attributes: ['id', 'name', 'role'] },
   { model: ChatMessage, as: 'reply_to', attributes: ['id', 'body', 'sender_user_id'] },
-  { model: ChatAttachment, as: 'attachments' }
+  { model: ChatAttachment, as: 'attachments' },
+  { model: ChatMessageReaction, as: 'reactions', attributes: ['id', 'user_id', 'emoji'] }
 ];
 
 function emitToRoom(io, roomId, event, payload) {
@@ -399,6 +401,167 @@ class ChatService {
     await message.save();
     emitToRoom(io, message.room_id, 'chat:message_deleted', { id: message.id, room_id: message.room_id });
     return { success: true };
+  }
+
+  // ── Reactions ─────────────────────────────────────────────────────────────
+
+  static async toggleReaction(messageId, user, emoji, io) {
+    const message = await ChatMessage.findByPk(messageId);
+    if (!message || message.deleted_at) throw new Error('Message not found');
+    await ensureMembership(message.room_id, user.id);
+
+    const existing = await ChatMessageReaction.findOne({
+      where: { message_id: messageId, user_id: user.id, emoji }
+    });
+    if (existing) {
+      await existing.destroy();
+    } else {
+      await ChatMessageReaction.create({
+        message_id: messageId,
+        user_id: user.id,
+        emoji
+      });
+    }
+
+    const all = await ChatMessageReaction.findAll({
+      where: { message_id: messageId },
+      attributes: ['id', 'user_id', 'emoji']
+    });
+    const payload = {
+      message_id: messageId,
+      room_id: message.room_id,
+      reactions: all.map(r => r.toJSON())
+    };
+    emitToRoom(io, message.room_id, 'chat:reaction_updated', payload);
+    return payload;
+  }
+
+  // ── Pin / unpin ───────────────────────────────────────────────────────────
+
+  static async setPinned(messageId, user, pinned, io) {
+    const message = await ChatMessage.findByPk(messageId);
+    if (!message || message.deleted_at) throw new Error('Message not found');
+    await ensureMembership(message.room_id, user.id);
+
+    if (pinned) {
+      message.pinned_at = new Date();
+      message.pinned_by_user_id = user.id;
+    } else {
+      message.pinned_at = null;
+      message.pinned_by_user_id = null;
+    }
+    await message.save();
+
+    const fresh = await ChatMessage.findByPk(messageId, { include: MESSAGE_INCLUDES });
+    const payload = fresh.toJSON();
+    emitToRoom(io, message.room_id, pinned ? 'chat:pinned' : 'chat:unpinned', payload);
+    return payload;
+  }
+
+  static async listPinned(roomId, user) {
+    await ensureMembership(roomId, user.id);
+    const messages = await ChatMessage.findAll({
+      where: { room_id: roomId, deleted_at: null, pinned_at: { [Op.ne]: null } },
+      order: [['pinned_at', 'DESC']],
+      include: MESSAGE_INCLUDES
+    });
+    return messages.map(m => m.toJSON());
+  }
+
+  // ── Forward ───────────────────────────────────────────────────────────────
+
+  static async forwardMessage(sourceMessageId, user, targetRoomId, io) {
+    const source = await ChatMessage.findByPk(sourceMessageId, {
+      include: [{ model: ChatAttachment, as: 'attachments' }]
+    });
+    if (!source || source.deleted_at) throw new Error('Source message not found');
+    await ensureMembership(source.room_id, user.id);
+    await ensureMembership(targetRoomId, user.id);
+
+    const tx = await sequelize.transaction();
+    try {
+      const newMessage = await ChatMessage.create({
+        room_id: targetRoomId,
+        sender_user_id: user.id,
+        body: source.body,
+        message_type: source.message_type,
+        forwarded_from_message_id: source.id
+      }, { transaction: tx });
+
+      for (const att of source.attachments || []) {
+        await ChatAttachment.create({
+          message_id: newMessage.id,
+          uploaded_by_user_id: user.id,
+          original_name: att.original_name,
+          stored_name: att.stored_name,
+          mime_type: att.mime_type,
+          file_size: att.file_size
+        }, { transaction: tx });
+      }
+
+      await ChatRoom.update(
+        { last_message_at: newMessage.created_at },
+        { where: { id: targetRoomId }, transaction: tx }
+      );
+      await tx.commit();
+
+      const full = await ChatMessage.findByPk(newMessage.id, { include: MESSAGE_INCLUDES });
+      const payload = full.toJSON();
+      emitToRoom(io, targetRoomId, 'chat:message_new', payload);
+      const members = await ChatRoomMember.findAll({ where: { room_id: targetRoomId } });
+      if (io) {
+        for (const m of members) {
+          io.to(`user:${m.user_id}`).emit('chat:room_updated', {
+            room_id: targetRoomId,
+            last_message: payload
+          });
+        }
+      }
+      return payload;
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+  }
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  static async search(user, { query, roomId = null, limit = 30 }) {
+    if (!query || query.trim().length < 2) return [];
+    const q = `%${query.trim()}%`;
+
+    let roomIds;
+    if (roomId) {
+      await ensureMembership(roomId, user.id);
+      roomIds = [roomId];
+    } else {
+      const memberships = await ChatRoomMember.findAll({ where: { user_id: user.id } });
+      roomIds = memberships.map(m => m.room_id);
+    }
+    if (roomIds.length === 0) return [];
+
+    const messages = await ChatMessage.findAll({
+      where: {
+        room_id: { [Op.in]: roomIds },
+        deleted_at: null,
+        body: { [Op.like]: q }
+      },
+      order: [['created_at', 'DESC']],
+      limit: Math.min(parseInt(limit) || 30, 100),
+      include: [
+        { model: User, as: 'sender', attributes: ['id', 'name'] },
+        {
+          model: ChatRoom,
+          as: 'room',
+          attributes: ['id', 'type', 'name', 'task_id'],
+          include: [{
+            model: ChatRoomMember, as: 'members',
+            include: [{ model: User, as: 'user', attributes: ['id', 'name'] }]
+          }]
+        }
+      ]
+    });
+    return messages.map(m => m.toJSON());
   }
 
   static async getUnreadTotal(user) {

@@ -43,6 +43,8 @@ class SocketService {
   final List<OnDataChangeCallback> _onChatReadCallbacks = [];
   final List<OnDataChangeCallback> _onChatMessageEditedCallbacks = [];
   final List<OnDataChangeCallback> _onChatMessageDeletedCallbacks = [];
+  final List<OnDataChangeCallback> _onChatReactionCallbacks = [];
+  final List<OnDataChangeCallback> _onChatPinCallbacks = [];
   final List<OnDataChangeCallback> _onPresenceCallbacks = [];
 
   // ── Connection state ───────────────────────────────────────────────────
@@ -229,6 +231,17 @@ class SocketService {
     socket.on('chat:read', (data) => _dispatch(_onChatReadCallbacks, data));
     socket.on('chat:message_edited', (data) => _dispatch(_onChatMessageEditedCallbacks, data));
     socket.on('chat:message_deleted', (data) => _dispatch(_onChatMessageDeletedCallbacks, data));
+    socket.on('chat:reaction_updated', (data) => _dispatch(_onChatReactionCallbacks, data));
+    socket.on('chat:pinned', (data) {
+      final m = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+      m['_action'] = 'pinned';
+      _dispatch(_onChatPinCallbacks, m);
+    });
+    socket.on('chat:unpinned', (data) {
+      final m = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+      m['_action'] = 'unpinned';
+      _dispatch(_onChatPinCallbacks, m);
+    });
 
     // Presence (online/offline) — wrap in a payload tagged with kind
     socket.on('presence:snapshot', (data) {
@@ -301,6 +314,16 @@ class SocketService {
   void Function() onPresence(OnDataChangeCallback cb) {
     _onPresenceCallbacks.add(cb);
     return () => _onPresenceCallbacks.remove(cb);
+  }
+
+  void Function() onChatReaction(OnDataChangeCallback cb) {
+    _onChatReactionCallbacks.add(cb);
+    return () => _onChatReactionCallbacks.remove(cb);
+  }
+
+  void Function() onChatPin(OnDataChangeCallback cb) {
+    _onChatPinCallbacks.add(cb);
+    return () => _onChatPinCallbacks.remove(cb);
   }
 
   void _handleNotificationEvent(dynamic data) {
@@ -516,6 +539,8 @@ class SocketService {
       _onChatReadCallbacks.clear();
       _onChatMessageEditedCallbacks.clear();
       _onChatMessageDeletedCallbacks.clear();
+      _onChatReactionCallbacks.clear();
+      _onChatPinCallbacks.clear();
       _onPresenceCallbacks.clear();
       _onPollTick = null;
       _logger.i('Socket service disposed');

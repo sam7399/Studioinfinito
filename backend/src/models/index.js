@@ -59,6 +59,7 @@ db.ChatRoom = require('./chatRoom')(sequelize, Sequelize.DataTypes);
 db.ChatRoomMember = require('./chatRoomMember')(sequelize, Sequelize.DataTypes);
 db.ChatMessage = require('./chatMessage')(sequelize, Sequelize.DataTypes);
 db.ChatAttachment = require('./chatAttachment')(sequelize, Sequelize.DataTypes);
+db.ChatMessageReaction = require('./chatMessageReaction')(sequelize, Sequelize.DataTypes);
 
 // Define associations
 Object.keys(db).forEach(modelName => {

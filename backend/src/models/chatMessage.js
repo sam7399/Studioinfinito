@@ -36,6 +36,20 @@ module.exports = (sequelize, DataTypes) => {
     deleted_at: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    pinned_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    pinned_by_user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: 'users', key: 'id' }
+    },
+    forwarded_from_message_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: 'chat_messages', key: 'id' }
     }
   }, {
     tableName: 'chat_messages',
@@ -52,6 +66,7 @@ module.exports = (sequelize, DataTypes) => {
     ChatMessage.belongsTo(models.User, { foreignKey: 'sender_user_id', as: 'sender' });
     ChatMessage.belongsTo(models.ChatMessage, { foreignKey: 'reply_to_id', as: 'reply_to' });
     ChatMessage.hasMany(models.ChatAttachment, { foreignKey: 'message_id', as: 'attachments' });
+    ChatMessage.hasMany(models.ChatMessageReaction, { foreignKey: 'message_id', as: 'reactions' });
   };
 
   return ChatMessage;

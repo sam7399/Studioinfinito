@@ -78,6 +78,20 @@ class ChatAttachment {
       );
 }
 
+class ChatReaction {
+  final int id;
+  final int userId;
+  final String emoji;
+
+  ChatReaction({required this.id, required this.userId, required this.emoji});
+
+  factory ChatReaction.fromJson(Map<String, dynamic> j) => ChatReaction(
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        userId: j['user_id'] as int,
+        emoji: (j['emoji'] as String?) ?? '',
+      );
+}
+
 class ChatMessage {
   final int id;
   final int roomId;
@@ -88,9 +102,12 @@ class ChatMessage {
   final ChatReplyPreview? replyTo;
   final DateTime? editedAt;
   final DateTime? deletedAt;
+  final DateTime? pinnedAt;
+  final int? forwardedFromMessageId;
   final DateTime createdAt;
   final ChatUser? sender;
   final List<ChatAttachment> attachments;
+  final List<ChatReaction> reactions;
 
   ChatMessage({
     required this.id,
@@ -102,10 +119,48 @@ class ChatMessage {
     this.replyTo,
     this.editedAt,
     this.deletedAt,
+    this.pinnedAt,
+    this.forwardedFromMessageId,
     required this.createdAt,
     this.sender,
     this.attachments = const [],
+    this.reactions = const [],
   });
+
+  bool get isPinned => pinnedAt != null;
+  bool get isForwarded => forwardedFromMessageId != null;
+
+  /// Aggregate reactions: { emoji → list of userIds }
+  Map<String, List<int>> reactionsByEmoji() {
+    final m = <String, List<int>>{};
+    for (final r in reactions) {
+      m.putIfAbsent(r.emoji, () => []).add(r.userId);
+    }
+    return m;
+  }
+
+  ChatMessage copyWith({
+    DateTime? pinnedAt,
+    bool clearPin = false,
+    List<ChatReaction>? reactions,
+  }) =>
+      ChatMessage(
+        id: id,
+        roomId: roomId,
+        senderUserId: senderUserId,
+        body: body,
+        messageType: messageType,
+        replyToId: replyToId,
+        replyTo: replyTo,
+        editedAt: editedAt,
+        deletedAt: deletedAt,
+        pinnedAt: clearPin ? null : (pinnedAt ?? this.pinnedAt),
+        forwardedFromMessageId: forwardedFromMessageId,
+        createdAt: createdAt,
+        sender: sender,
+        attachments: attachments,
+        reactions: reactions ?? this.reactions,
+      );
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
         id: j['id'] as int,
@@ -119,10 +174,15 @@ class ChatMessage {
             : null,
         editedAt: j['edited_at'] != null ? DateTime.tryParse(j['edited_at'].toString()) : null,
         deletedAt: j['deleted_at'] != null ? DateTime.tryParse(j['deleted_at'].toString()) : null,
+        pinnedAt: j['pinned_at'] != null ? DateTime.tryParse(j['pinned_at'].toString()) : null,
+        forwardedFromMessageId: j['forwarded_from_message_id'] as int?,
         createdAt: DateTime.parse(j['created_at']?.toString() ?? DateTime.now().toIso8601String()),
         sender: j['sender'] != null ? ChatUser.fromJson(Map<String, dynamic>.from(j['sender'])) : null,
         attachments: ((j['attachments'] as List?) ?? [])
             .map((a) => ChatAttachment.fromJson(Map<String, dynamic>.from(a as Map)))
+            .toList(),
+        reactions: ((j['reactions'] as List?) ?? [])
+            .map((r) => ChatReaction.fromJson(Map<String, dynamic>.from(r as Map)))
             .toList(),
       );
 }

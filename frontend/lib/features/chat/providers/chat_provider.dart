@@ -164,6 +164,8 @@ class ChatRoomNotifier extends Notifier<ChatRoomState> {
   void Function()? _disposeEdit;
   void Function()? _disposeDel;
   void Function()? _disposeTyping;
+  void Function()? _disposeReaction;
+  void Function()? _disposePin;
   Timer? _typingClearTimer;
 
   @override
@@ -214,6 +216,31 @@ class ChatRoomNotifier extends Notifier<ChatRoomState> {
       });
     });
 
+    _disposeReaction = _socket.onChatReaction((data) {
+      if ((data['room_id'] as int?) != roomId) return;
+      final messageId = data['message_id'] as int?;
+      if (messageId == null) return;
+      final reactionsList = (data['reactions'] as List?) ?? [];
+      final reactions = reactionsList
+          .map((r) => ChatReaction.fromJson(Map<String, dynamic>.from(r as Map)))
+          .toList();
+      state = state.copyWith(
+        messages: state.messages
+            .map((m) => m.id == messageId ? m.copyWith(reactions: reactions) : m)
+            .toList(),
+      );
+    });
+
+    _disposePin = _socket.onChatPin((data) {
+      final updated = ChatMessage.fromJson(Map<String, dynamic>.from(data));
+      if (updated.roomId != roomId) return;
+      state = state.copyWith(
+        messages: state.messages
+            .map((m) => m.id == updated.id ? updated : m)
+            .toList(),
+      );
+    });
+
     _socket.joinChatRoom(roomId);
 
     ref.onDispose(() {
@@ -221,6 +248,8 @@ class ChatRoomNotifier extends Notifier<ChatRoomState> {
       _disposeEdit?.call();
       _disposeDel?.call();
       _disposeTyping?.call();
+      _disposeReaction?.call();
+      _disposePin?.call();
       _typingClearTimer?.cancel();
       _socket.leaveChatRoom(roomId);
     });
@@ -316,6 +345,36 @@ class ChatRoomNotifier extends Notifier<ChatRoomState> {
         error: e.response?.data?['message']?.toString() ?? 'Failed to delete',
       );
     }
+  }
+
+  Future<void> toggleReaction(int messageId, String emoji) async {
+    try {
+      final reactions = await _service.toggleReaction(messageId, emoji);
+      state = state.copyWith(
+        messages: state.messages
+            .map((m) => m.id == messageId ? m.copyWith(reactions: reactions) : m)
+            .toList(),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> togglePin(int messageId, bool pin) async {
+    try {
+      final updated = pin
+          ? await _service.pinMessage(messageId)
+          : await _service.unpinMessage(messageId);
+      state = state.copyWith(
+        messages: state.messages
+            .map((m) => m.id == messageId ? updated : m)
+            .toList(),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> forward(int messageId, int targetRoomId) async {
+    try {
+      await _service.forwardMessage(messageId, targetRoomId);
+    } catch (_) {}
   }
 }
 
@@ -449,3 +508,41 @@ class ChatMembersNotifier extends Notifier<ChatMembersState> {
 
 final chatMembersProvider = NotifierProvider.family<ChatMembersNotifier,
     ChatMembersState, int>((roomId) => ChatMembersNotifier(roomId));
+
+// ── Pinned messages ─────────────────────────────────────────────────────────
+
+class ChatPinnedNotifier extends Notifier<List<ChatMessage>> {
+  ChatPinnedNotifier(this.roomId);
+  final int roomId;
+  late final ChatService _service;
+  void Function()? _disposePin;
+
+  @override
+  List<ChatMessage> build() {
+    _service = ref.watch(chatServiceProvider);
+    final socket = SocketService();
+    _disposePin = socket.onChatPin((_) => refresh());
+    ref.onDispose(() => _disposePin?.call());
+    Future.microtask(refresh);
+    return const [];
+  }
+
+  Future<void> refresh() async {
+    try {
+      final list = await _service.listPinned(roomId);
+      state = list;
+    } catch (_) {}
+  }
+}
+
+final chatPinnedProvider = NotifierProvider.family<ChatPinnedNotifier,
+    List<ChatMessage>, int>((roomId) => ChatPinnedNotifier(roomId));
+
+// ── Search ──────────────────────────────────────────────────────────────────
+
+final chatSearchProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, query) async {
+  if (query.trim().length < 2) return [];
+  final svc = ref.watch(chatServiceProvider);
+  return svc.search(query);
+});

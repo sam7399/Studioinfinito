@@ -106,4 +106,11 @@ class ApiConstants {
   static String chatMessageById(int messageId) => '/chat/messages/$messageId';
   static String chatAttachmentById(int attachmentId) =>
       '/chat/attachments/$attachmentId';
+  static String chatMessageReactions(int messageId) =>
+      '/chat/messages/$messageId/reactions';
+  static String chatMessagePin(int messageId) => '/chat/messages/$messageId/pin';
+  static String chatMessageForward(int messageId) =>
+      '/chat/messages/$messageId/forward';
+  static String chatRoomPinned(int roomId) => '/chat/rooms/$roomId/pinned';
+  static const String chatSearch = '/chat/search';
 }

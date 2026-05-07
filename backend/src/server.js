@@ -212,6 +212,41 @@ async function ensureSchema() {
       logger.info('[schema] Created table chat_messages');
     }
 
+    // Add late columns to chat_messages
+    try {
+      const cmCols = await qi.describeTable('chat_messages');
+      if (!cmCols.pinned_at) {
+        await sequelize.query('ALTER TABLE chat_messages ADD COLUMN pinned_at DATETIME NULL');
+        logger.info('[schema] Added column chat_messages.pinned_at');
+      }
+      if (!cmCols.pinned_by_user_id) {
+        await sequelize.query('ALTER TABLE chat_messages ADD COLUMN pinned_by_user_id INT NULL');
+        logger.info('[schema] Added column chat_messages.pinned_by_user_id');
+      }
+      if (!cmCols.forwarded_from_message_id) {
+        await sequelize.query('ALTER TABLE chat_messages ADD COLUMN forwarded_from_message_id INT NULL');
+        logger.info('[schema] Added column chat_messages.forwarded_from_message_id');
+      }
+    } catch (_) {}
+
+    if (!tables.includes('chat_message_reactions')) {
+      await sequelize.query(`
+        CREATE TABLE chat_message_reactions (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          message_id INT NOT NULL,
+          user_id INT NOT NULL,
+          emoji VARCHAR(16) NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_cmr_msg FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT fk_cmr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE KEY cmr_unique (message_id, user_id, emoji),
+          KEY cmr_msg_idx (message_id)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      `);
+      logger.info('[schema] Created table chat_message_reactions');
+    }
+
     if (!tables.includes('chat_attachments')) {
       await sequelize.query(`
         CREATE TABLE chat_attachments (

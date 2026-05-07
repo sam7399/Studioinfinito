@@ -219,3 +219,97 @@ exports.getUnreadCount = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.toggleReaction = async (req, res, next) => {
+  try {
+    const messageId = parseInt(req.params.messageId, 10);
+    const { emoji } = req.body;
+    const data = await ChatService.toggleReaction(messageId, req.user, emoji, getIo());
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    logger.error('chat.toggleReaction', { err: err.message });
+    if (err.message === 'Message not found') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    if (err.message === 'Not a member of this room') {
+      return res.status(403).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.pinMessage = async (req, res, next) => {
+  try {
+    const messageId = parseInt(req.params.messageId, 10);
+    const data = await ChatService.setPinned(messageId, req.user, true, getIo());
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    logger.error('chat.pinMessage', { err: err.message });
+    if (err.message === 'Message not found') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    if (err.message === 'Not a member of this room') {
+      return res.status(403).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.unpinMessage = async (req, res, next) => {
+  try {
+    const messageId = parseInt(req.params.messageId, 10);
+    const data = await ChatService.setPinned(messageId, req.user, false, getIo());
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    logger.error('chat.unpinMessage', { err: err.message });
+    if (err.message === 'Message not found') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.listPinned = async (req, res, next) => {
+  try {
+    const roomId = parseInt(req.params.id, 10);
+    const data = await ChatService.listPinned(roomId, req.user);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    logger.error('chat.listPinned', { err: err.message });
+    if (err.message === 'Not a member of this room') {
+      return res.status(403).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.forwardMessage = async (req, res, next) => {
+  try {
+    const messageId = parseInt(req.params.messageId, 10);
+    const targetRoomId = parseInt(req.body.room_id, 10);
+    const data = await ChatService.forwardMessage(messageId, req.user, targetRoomId, getIo());
+    return res.status(201).json({ success: true, data });
+  } catch (err) {
+    logger.error('chat.forwardMessage', { err: err.message });
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    if (err.message === 'Not a member of this room') {
+      return res.status(403).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+};
+
+exports.search = async (req, res, next) => {
+  try {
+    const q = (req.query.q || '').toString();
+    const roomId = req.query.room_id ? parseInt(req.query.room_id, 10) : null;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 30;
+    const results = await ChatService.search(req.user, { query: q, roomId, limit });
+    return res.status(200).json({ success: true, data: results });
+  } catch (err) {
+    logger.error('chat.search', { err: err.message });
+    next(err);
+  }
+};

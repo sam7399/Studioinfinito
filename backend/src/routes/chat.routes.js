@@ -148,4 +148,62 @@ router.delete(
   chatController.deleteMessage
 );
 
+// Reactions
+router.post(
+  '/messages/:messageId/reactions',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ messageId: Joi.number().integer().required() }),
+    [Segments.BODY]: Joi.object({ emoji: Joi.string().required().max(16) })
+  }),
+  chatController.toggleReaction
+);
+
+// Pin / unpin
+router.post(
+  '/messages/:messageId/pin',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ messageId: Joi.number().integer().required() })
+  }),
+  chatController.pinMessage
+);
+
+router.delete(
+  '/messages/:messageId/pin',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ messageId: Joi.number().integer().required() })
+  }),
+  chatController.unpinMessage
+);
+
+router.get(
+  '/rooms/:id/pinned',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ id: Joi.number().integer().required() })
+  }),
+  chatController.listPinned
+);
+
+// Forward
+router.post(
+  '/messages/:messageId/forward',
+  celebrate({
+    [Segments.PARAMS]: Joi.object({ messageId: Joi.number().integer().required() }),
+    [Segments.BODY]: Joi.object({ room_id: Joi.number().integer().required() })
+  }),
+  chatController.forwardMessage
+);
+
+// Search
+router.get(
+  '/search',
+  celebrate({
+    [Segments.QUERY]: Joi.object({
+      q: Joi.string().required().min(2).max(255),
+      room_id: Joi.number().integer(),
+      limit: Joi.number().integer().min(1).max(100)
+    })
+  }),
+  chatController.search
+);
+
 module.exports = router;
