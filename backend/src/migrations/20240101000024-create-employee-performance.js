@@ -81,9 +81,9 @@ module.exports = {
       updated_at: {
         type: Sequelize.DATE,
         allowNull: false,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
       }
-    }, { charset: 'utf8mb4', collate: 'utf8mb4_unicode_ci' });
+    });
 
     await queryInterface.addIndex('employee_performance', ['user_id'], { name: 'ep_user_id_idx' });
     await queryInterface.addIndex('employee_performance', ['department_id'], { name: 'ep_dept_id_idx' });

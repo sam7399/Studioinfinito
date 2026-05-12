@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - **Node.js**: v18+ (backend)
-- **MySQL**: v8.0+ (database)
+- **PostgreSQL**: v15+ (or Supabase free tier)
 - **Flutter**: v3.19+ (frontend)
 - **Git**: Latest version
 
@@ -23,12 +23,13 @@ npm install
 Edit `backend/.env` with your settings:
 
 ```env
-# Database (required)
-DBHOST=localhost
-DBNAME=task_manager
-DBUSER=root
-DBPASS=your_password
-DBPORT=3306
+# Supabase PostgreSQL (required)
+DBHOST=db.<your-project-ref>.supabase.co
+DBNAME=postgres
+DBUSER=postgres
+DBPASS=your-supabase-password
+DBPORT=5432
+DBSSL=true
 
 # JWT Secret (required - min 32 chars)
 JWT_SECRET=your-super-secret-jwt-key-min-32-characters-long
@@ -42,15 +43,16 @@ EMAILPASS=your-app-password
 ### 3. Setup Database
 
 ```bash
-# Option 1: Using MySQL CLI
-mysql -u root -p < database_setup.sql
+# Option 1: Create Supabase project at https://supabase.com
+# Copy connection details to .env
 
 # Option 2: Run migrations (creates tables automatically)
-npm run migrate
+npm run db:migrate
 
 # Option 3: Full reset with seed data
-npm run migrate:reset
-npm run seed
+npm run db:migrate:undo
+npm run db:migrate
+npm run seed:demo
 ```
 
 ### 4. Start Server
@@ -106,9 +108,9 @@ flutter build web
 |---------|-------------|
 | `npm run dev` | Start with hot-reload |
 | `npm start` | Start production server |
-| `npm run migrate` | Run database migrations |
-| `npm run migrate:reset` | Reset and re-run migrations |
-| `npm run seed` | Seed database with test data |
+| `npm run db:migrate` | Run database migrations |
+| `npm run db:migrate:undo` | Undo last migration |
+| `npm run seed:demo` | Seed database with demo data |
 | `npm test` | Run tests |
 
 ---
@@ -135,6 +137,9 @@ See `CODE_ARCHITECTURE.md` for detailed architecture documentation.
 - ✅ Fixed column name `assigned_to` → `assigned_to_user_id` in `performanceService.js`
 - ✅ Fixed nodemailer version `^8.0.1` → `^6.9.13`
 - ✅ Relaxed email config validation for development
+- ✅ Migrated from MySQL to PostgreSQL (Supabase)
+- ✅ Converted all migrations and raw DDL to PostgreSQL syntax
+- ✅ Replaced `mysql2` with `pg`/`pg-hstore` in dependencies
 
 ---
 

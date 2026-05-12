@@ -18,11 +18,10 @@ const sequelize = new Sequelize(
       idle: 10000
     },
     dialectOptions: {
-      connectTimeout: 20000
+      connectTimeout: 20000,
+      ...(config.database.dialectOptions || {})
     },
     define: {
-      charset: 'utf8mb4',
-      collate: 'utf8mb4_unicode_ci',
       timestamps: true,
       underscored: true
     }

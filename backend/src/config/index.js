@@ -6,13 +6,20 @@ const config = {
   
   database: {
     host: process.env.DBHOST || 'localhost',
-    name: process.env.DBNAME || 'task_manager',
-    user: process.env.DBUSER || 'root',
+    name: process.env.DBNAME || 'postgres',
+    user: process.env.DBUSER || 'postgres',
     password: process.env.DBPASS || '',
-    port: parseInt(process.env.DBPORT, 10) || 3306,
-    dialect: 'mysql',
+    port: parseInt(process.env.DBPORT, 10) || 5432,
+    dialect: 'postgres',
     timezone: '+00:00',
-    logging: process.env.NODE_ENV === 'development' ? console.log : false
+    logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    ssl: process.env.DBSSL !== 'false',
+    dialectOptions: process.env.DBSSL !== 'false' ? {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    } : {}
   },
 
   jwt: {

@@ -1,127 +1,231 @@
-# Studioinfinito - Multi-Platform Deployment Guide
+# Studioinfinito - Deployment Guide
 
-Your app is configured for deployment on **Railway**, **Render**, and **Hostinger**. Here's how to manage each:
+## Architecture: Supabase + Hostinger + GitHub
+
+```
+┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
+│   Hostinger         │     │   Hostinger          │     │   Supabase          │
+│   (Frontend)        │────▶│   (Backend API)      │◄────│   (PostgreSQL DB)   │
+│                     │     │                      │     │                     │
+│ task.thestudio      │     │ api.thestudio        │     │ db.<ref>.supabase   │
+│ infinito.com        │     │ infinito.com         │     │ .co:5432            │
+│ Flutter Web (static)│     │ Node.js + Express    │     │ Free/Pro tier       │
+└─────────────────────┘     └─────────────────────┘     └─────────────────────┘
+        │                           │
+        │                           │ GitHub → Auto-deploy
+        ▼                           ▼
+   CDN/Cloudflare           github.com/sam7399/
+   (optional)               Studioinfinito
+```
 
 ---
 
-## 1. Railway Deployment
+## 1. Supabase Database Setup
 
-### Current Config: `railway.json`
-```json
-{
-  "build": { "builder": "NIXPACKS" },
-  "deploy": {
-    "startCommand": "cd backend && npm start",
-    "healthcheckPath": "/api/v1/health"
-  }
+### Create Project:
+1. Go to https://supabase.com → **New Project**
+2. Choose a name, set a strong **database password**, select region
+3. Wait for project to provision
+
+### Get Connection Details:
+1. Go to **Settings → Database → Connection string → URI**
+2. Copy the individual fields for your `.env`:
+
+```env
+DBHOST=db.<your-project-ref>.supabase.co
+DBNAME=postgres
+DBUSER=postgres
+DBPASS=<your-database-password>
+DBPORT=5432
+DBSSL=true
+```
+
+### Run Migrations:
+```bash
+cd backend
+npm run db:migrate
+```
+
+Tables are also auto-created on server startup via `ensureSchema()`.
+
+---
+
+## 2. Hostinger Backend Deployment
+
+### Option A: Node.js VPS Hosting
+If you have a Hostinger VPS:
+
+```bash
+# SSH into your VPS
+ssh user@your-vps-ip
+
+# Clone the repo
+git clone https://github.com/sam7399/Studioinfinito.git
+cd Studioinfinito/backend
+
+# Install dependencies
+npm install --production
+
+# Create .env with production values
+nano .env
+```
+
+**Production `.env`:**
+```env
+NODE_ENV=production
+PORT=26627
+
+# Supabase Database
+DBHOST=db.<your-project-ref>.supabase.co
+DBNAME=postgres
+DBUSER=postgres
+DBPASS=<your-supabase-password>
+DBPORT=5432
+DBSSL=true
+
+# JWT
+JWT_SECRET=<generate-strong-secret-min-32-chars>
+JWT_EXPIRES_IN=12h
+
+# Email
+EMAILHOST=smtp.gmail.com
+EMAILPORT=587
+EMAILSECURE=false
+EMAILUSER=your-email@gmail.com
+EMAILPASS=your-app-specific-password
+EMAIL_FROM=TSI Task Manager <no-reply@thestudioinfinito.com>
+
+# URLs
+BASE_URL_API=https://api.thestudioinfinito.com
+BASE_URL_APP=https://task.thestudioinfinito.com
+CORS_ORIGINS=https://task.thestudioinfinito.com,https://www.thestudioinfinito.com
+
+LOG_LEVEL=info
+```
+
+**Start with PM2 (recommended):**
+```bash
+npm install -g pm2
+pm2 start src/server.js --name tsi-backend
+pm2 save
+pm2 startup
+```
+
+**Set up Nginx reverse proxy:**
+```nginx
+server {
+    listen 80;
+    server_name api.thestudioinfinito.com;
+
+    location / {
+        proxy_pass http://localhost:26627;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
 }
 ```
 
-### Deploy Steps:
-1. **Dashboard**: https://railway.app
-2. **New Project** → Deploy from GitHub repo
-3. **Add Variables** in Railway dashboard:
-   ```
-   NODE_ENV=production
-   JWT_SECRET=<generate-strong-secret>
-   DBHOST=<your-mysql-host>
-   DBUSER=<db-user>
-   DBPASS=<db-password>
-   DBNAME=task_manager
-   EMAILHOST=smtp.gmail.com
-   EMAILUSER=<your-email>
-   EMAILPASS=<app-password>
-   ```
-4. **Add MySQL**: New → Database → MySQL
-5. **Domain**: Settings → Generate Domain (e.g., `yourapp.up.railway.app`)
-
-### Update Frontend API URL:
-```env
-# frontend/.env
-API_BASE_URL=https://yourapp.up.railway.app/api/v1
-WS_URL=wss://yourapp.up.railway.app
+**Enable SSL (Let's Encrypt):**
+```bash
+sudo certbot --nginx -d api.thestudioinfinito.com
 ```
 
----
-
-## 2. Render Deployment
-
-### Current Config: `render.yaml`
-```yaml
-version: "1"
-projects:
-- name: TSI Task Manager
-  services:
-  - type: web
-    runtime: node
-    buildCommand: npm install
-    startCommand: node src/server.js
-    rootDir: backend
-```
-
-### Deploy Steps:
-1. **Dashboard**: https://dashboard.render.com
-2. **Blueprint** → New Web Service from GitHub
-3. **Use Blueprint**: Select `render.yaml` from repo
-4. **Environment Variables** (set manually in dashboard):
-   - All variables with `sync: false` in render.yaml need values
-   - `JWT_SECRET`, `DBHOST`, `DBUSER`, `DBPASS`, etc.
-5. **Database**: New → PostgreSQL (or connect external MySQL)
-6. **Custom Domain**: Settings → Custom Domain → Add `api.thestudioinfinito.com`
-
-### Production URLs:
-- **API**: `https://task-manager-api.onrender.com` (or your custom domain)
-- **Web App**: `https://task.thestudioinfinito.com` (Hostinger)
+### Option B: Hostinger Shared Hosting (Node.js)
+If your Hostinger plan supports Node.js:
+1. **hPanel** → Websites → Node.js
+2. Set **Root directory**: `backend`
+3. Set **Startup file**: `src/server.js`
+4. Set **Node version**: 18.x
+5. Add environment variables in hPanel
+6. Connect GitHub repo for auto-deploy
 
 ---
 
 ## 3. Hostinger Frontend Deployment
 
-Since Hostinger is for **frontend only** (Flutter web build):
-
-### Build & Deploy:
+### Build Flutter Web:
 ```bash
-# 1. Build Flutter for web
 cd frontend
 flutter build web --release
-
-# 2. Output is in: build/web/
-
-# 3. Upload to Hostinger:
-#    - File Manager → public_html/
-#    - Upload all files from build/web/
 ```
 
-### Or use Git + Hostinger hPanel:
-1. **hPanel** → Advanced → Git
-2. Connect GitHub repo
-3. Set deployment path to `public_html/`
-4. **Auto-deploy**: Enable on push to main
+### Upload to Hostinger:
+1. **hPanel** → File Manager → `public_html/`
+2. Upload all files from `frontend/build/web/`
 
-### Configure CORS:
-Update `backend/.env` with your Hostinger domain:
-```env
-CORS_ORIGINS=https://task.thestudioinfinito.com,https://www.thestudioinfinito.com
-BASE_URL_APP=https://task.thestudioinfinito.com
+### Or use Git Deploy:
+1. **hPanel** → Advanced → Git
+2. Connect GitHub repo (branch: `main`)
+3. Set auto-deploy path to `public_html/`
+
+### Configure `.htaccess` for SPA routing:
+Create `public_html/.htaccess`:
+```apache
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.html$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]
+```
+
+---
+
+## 4. GitHub Repository
+
+**URL**: https://github.com/sam7399/Studioinfinito
+
+### Auto-Deploy on Push:
+Set up a GitHub Action for automated deployment:
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/Studioinfinito/backend
+            git pull origin main
+            npm install --production
+            pm2 restart tsi-backend
 ```
 
 ---
 
 ## Environment Variables Reference
 
-### Required for All Platforms:
+### Required:
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `NODE_ENV` | Environment | `production` |
-| `PORT` | Server port | `26627` (Railway/Render auto-set) |
+| `PORT` | Server port | `26627` |
 | `JWT_SECRET` | JWT signing key | `min-32-char-secret-here` |
-| `DBHOST` | Database host | `mysql.railway.internal` |
-| `DBPORT` | Database port | `3306` |
-| `DBNAME` | Database name | `task_manager` |
-| `DBUSER` | Database user | `root` |
-| `DBPASS` | Database password | `secure-password` |
+| `DBHOST` | Supabase DB host | `db.xxxx.supabase.co` |
+| `DBPORT` | Database port | `5432` |
+| `DBNAME` | Database name | `postgres` |
+| `DBUSER` | Database user | `postgres` |
+| `DBPASS` | Database password | `your-supabase-password` |
+| `DBSSL` | Enable SSL | `true` |
 
-### Optional (Email Features):
+### Optional (Email):
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `EMAILHOST` | SMTP host | `smtp.gmail.com` |
@@ -130,7 +234,7 @@ BASE_URL_APP=https://task.thestudioinfinito.com
 | `EMAILPASS` | SMTP app password | `xxxx xxxx xxxx xxxx` |
 | `EMAIL_FROM` | From address | `TSI <noreply@domain.com>` |
 
-### URL Configuration:
+### URLs:
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `BASE_URL_API` | Backend API URL | `https://api.thestudioinfinito.com` |
@@ -139,39 +243,10 @@ BASE_URL_APP=https://task.thestudioinfinito.com
 
 ---
 
-## Database Migrations on Deploy
-
-### Option 1: Auto-migrate on startup (Recommended)
-Add to `backend/src/server.js` before server start:
-```javascript
-const { sequelize } = require('./models');
-
-// Sync models (creates tables if not exist)
-await sequelize.sync({ alter: false });
-```
-
-### Option 2: Manual migration command
-```bash
-# After deploy, run in Render/Railway console:
-npm run migrate
-```
-
-### Option 3: Use Sequelize CLI with migration files
-```bash
-# Generate migration
-npx sequelize-cli migration:generate --name create-users
-
-# Run migrations
-npx sequelize-cli db:migrate
-```
-
----
-
-## Health Check Endpoint
+## Health Check
 
 Verify deployment: `GET /api/v1/health`
 
-Should return:
 ```json
 {
   "status": "ok",
@@ -184,69 +259,42 @@ Should return:
 
 ## Troubleshooting
 
-### Railway:
-- Check **Deploy Logs** in dashboard
-- Verify **Environment Variables** are set
-- Check **Metrics** for resource limits
+### Supabase DB:
+- **Connection refused**: Check `DBSSL=true` is set
+- **Auth failed**: Verify password in Supabase Settings → Database
+- **Test connection**: `psql "postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres"`
 
-### Render:
-- View **Logs** tab
-- Check **Events** for startup failures
-- Verify **Start Command**: `node src/server.js`
+### Hostinger Backend:
+- Check PM2 logs: `pm2 logs tsi-backend`
+- Check Nginx logs: `sudo tail -f /var/log/nginx/error.log`
+- Verify Node.js version: `node -v` (should be 18.x+)
 
-### Hostinger:
-- Check **Error Logs** in hPanel
-- Verify **PHP version** (not applicable for Flutter - static files only)
-- Clear **Browser Cache** after deploy
-
-### Database Connection Issues:
-```bash
-# Test connection from local:
-mysql -h <DBHOST> -u <DBUSER> -p
-
-# Check if database exists:
-SHOW DATABASES;
-USE task_manager;
-SHOW TABLES;
-```
-
----
-
-## Recommended Architecture
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Hostinger     │     │   Railway/      │     │   Railway/      │
-│   (Frontend)    │────▶│   Render        │◄────│   MySQL/        │
-│                 │     │   (Backend API) │     │   PostgreSQL    │
-│ task.thestudio  │     │                 │     │                 │
-│ infinito.com    │     │ api.thestudio   │     │ mysql.railway   │
-│                 │     │ infinito.com    │     │ .internal       │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-        │
-        │ Flutter Web
-        │ (Static files)
-        ▼
-   CDN/Cloudflare (optional)
-```
+### Hostinger Frontend:
+- Clear browser cache after deploy
+- Check `.htaccess` exists for SPA routing
+- Verify `frontend/.env` API URL points to correct backend
 
 ---
 
 ## Quick Deploy Checklist
 
+- [ ] Supabase project created and connection details copied
 - [ ] Push latest code to GitHub
-- [ ] Verify all env vars set in Railway/Render dashboard
-- [ ] Database created and accessible
-- [ ] Run migrations (`npm run migrate`)
-- [ ] Health check endpoint responding
-- [ ] Frontend built (`flutter build web`)
-- [ ] Frontend uploaded to Hostinger
-- [ ] CORS origins updated in backend
+- [ ] Backend `.env` configured with Supabase credentials
+- [ ] Backend deployed on Hostinger (VPS or Node.js hosting)
+- [ ] PM2 running + Nginx configured with SSL
+- [ ] Migrations ran successfully (`npm run db:migrate`)
+- [ ] Health check responding at `/api/v1/health`
+- [ ] Frontend built (`flutter build web --release`)
+- [ ] Frontend uploaded to Hostinger `public_html/`
+- [ ] `.htaccess` configured for SPA routing
+- [ ] CORS origins set correctly in backend `.env`
 - [ ] Test login with seeded admin account
 
 ---
 
-**Live URLs** (update these):
+**Live URLs:**
 - Frontend: https://task.thestudioinfinito.com
-- Backend API: https://your-service.railway.app/api/v1
-- Health Check: https://your-service.railway.app/api/v1/health
+- Backend API: https://api.thestudioinfinito.com/api/v1
+- Health Check: https://api.thestudioinfinito.com/api/v1/health
+- Supabase Dashboard: https://supabase.com/dashboard

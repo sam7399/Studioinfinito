@@ -69,9 +69,9 @@ module.exports = {
       updated_at: {
         type: Sequelize.DATE,
         allowNull: false,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
       }
-    }, { charset: 'utf8mb4', collate: 'utf8mb4_unicode_ci' });
+    });
 
     await queryInterface.addIndex('task_metrics', ['user_id'], { name: 'tm_user_id_idx' });
     await queryInterface.addIndex('task_metrics', ['period_start', 'period_end'], { name: 'tm_period_idx' });

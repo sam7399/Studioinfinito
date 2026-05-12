@@ -23,272 +23,215 @@ const PORT = config.port;
 
 // Ensure required schema columns/tables exist via direct SQL (runs every startup).
 // This is more reliable than migration-only approach.
+// PostgreSQL-compatible DDL for Supabase.
 async function ensureSchema() {
   const qi = sequelize.getQueryInterface();
   try {
+    // Helper: add column if it doesn't exist (PostgreSQL)
+    async function addColumnIfMissing(table, column, definition) {
+      try {
+        await sequelize.query(
+          `DO $$ BEGIN
+            ALTER TABLE "${table}" ADD COLUMN "${column}" ${definition};
+          EXCEPTION WHEN duplicate_column THEN NULL;
+          END $$;`
+        );
+      } catch (e) {
+        console.log(`[schema] addColumn ${table}.${column} skipped:`, e.message);
+      }
+    }
+
+    // Create custom enum types (PostgreSQL uses CREATE TYPE instead of ENUM inline)
+    try {
+      await sequelize.query(`DO $$ BEGIN CREATE TYPE chat_room_type AS ENUM ('direct','task','group'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`);
+      await sequelize.query(`DO $$ BEGIN CREATE TYPE chat_message_type AS ENUM ('text','image','file','audio','system'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`);
+    } catch (_) {}
+
     // Ensure task_reviews has rating columns (added for HR matrix)
     try {
-      const reviewCols = await qi.describeTable('task_reviews');
-      if (!reviewCols.rating) {
-        await sequelize.query('ALTER TABLE task_reviews ADD COLUMN rating DECIMAL(3,1) NULL');
-        console.log('[schema] Added column task_reviews.rating');
-      }
-      if (!reviewCols.quality_score) {
-        await sequelize.query('ALTER TABLE task_reviews ADD COLUMN quality_score DECIMAL(3,1) NULL');
-        console.log('[schema] Added column task_reviews.quality_score');
-      }
-      if (!reviewCols.timeliness_score) {
-        await sequelize.query('ALTER TABLE task_reviews ADD COLUMN timeliness_score DECIMAL(3,1) NULL');
-        console.log('[schema] Added column task_reviews.timeliness_score');
-      }
+      await addColumnIfMissing('task_reviews', 'rating', 'DECIMAL(3,1) NULL');
+      await addColumnIfMissing('task_reviews', 'quality_score', 'DECIMAL(3,1) NULL');
+      await addColumnIfMissing('task_reviews', 'timeliness_score', 'DECIMAL(3,1) NULL');
     } catch (e) {
       console.log('[schema] task_reviews check skipped:', e.message);
     }
 
     console.log('[STARTUP] ensureSchema: describing tasks table...');
-    const cols = await qi.describeTable('tasks');
-
-    if (!cols.show_collaborators) {
-      await sequelize.query('ALTER TABLE tasks ADD COLUMN show_collaborators TINYINT(1) NOT NULL DEFAULT 1');
-      logger.info('[schema] Added column show_collaborators');
-    }
-    if (!cols.escalation_level) {
-      await sequelize.query('ALTER TABLE tasks ADD COLUMN escalation_level INT NOT NULL DEFAULT 0');
-      logger.info('[schema] Added column escalation_level');
-    }
-    if (!cols.last_escalation_at) {
-      await sequelize.query('ALTER TABLE tasks ADD COLUMN last_escalation_at DATETIME NULL');
-      logger.info('[schema] Added column last_escalation_at');
-    }
-
-    const tables = await qi.showAllTables();
-
-    if (!tables.includes('task_assignments')) {
-      await sequelize.query(`
-        CREATE TABLE task_assignments (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          task_id INT NOT NULL,
-          user_id INT NOT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_ta_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_ta_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE KEY ta_task_user_unique (task_id, user_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table task_assignments');
-    }
-
-    if (!tables.includes('task_dependencies')) {
-      await sequelize.query(`
-        CREATE TABLE task_dependencies (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          task_id INT NOT NULL,
-          depends_on_task_id INT NOT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_td_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_td_dep FOREIGN KEY (depends_on_task_id) REFERENCES tasks(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE KEY td_unique (task_id, depends_on_task_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table task_dependencies');
-    }
-
-    if (!tables.includes('task_attachments')) {
-      await sequelize.query(`
-        CREATE TABLE task_attachments (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          task_id INT NOT NULL,
-          uploaded_by_user_id INT NOT NULL,
-          original_name VARCHAR(255) NOT NULL,
-          stored_name VARCHAR(255) NOT NULL,
-          mime_type VARCHAR(100) NULL,
-          file_size INT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_attach_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_attach_user FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
-          KEY ta_attach_task_id_idx (task_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table task_attachments');
-    }
-
-    if (!tables.includes('system_configs')) {
-      await sequelize.query(`
-        CREATE TABLE system_configs (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          \`key\` VARCHAR(100) NOT NULL UNIQUE,
-          value TEXT NOT NULL,
-          description VARCHAR(255) NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      await sequelize.query(`INSERT INTO system_configs (\`key\`, value, description) VALUES
-        ('multi_company_users', 'false', 'Allow users to belong to multiple companies'),
-        ('multi_location_users', 'false', 'Allow users to belong to multiple locations')`);
-      logger.info('[schema] Created table system_configs');
-    }
-
-    if (!tables.includes('user_companies')) {
-      await sequelize.query(`
-        CREATE TABLE user_companies (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          user_id INT NOT NULL,
-          company_id INT NOT NULL,
-          is_primary TINYINT(1) NOT NULL DEFAULT 0,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_uc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_uc_company FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE KEY uc_user_company_unique (user_id, company_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table user_companies');
-    }
-
-    if (!tables.includes('chat_rooms')) {
-      await sequelize.query(`
-        CREATE TABLE chat_rooms (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          type ENUM('direct','task','group') NOT NULL DEFAULT 'direct',
-          task_id INT NULL,
-          name VARCHAR(255) NULL,
-          created_by_user_id INT NOT NULL,
-          last_message_at DATETIME NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_cr_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL ON UPDATE CASCADE,
-          CONSTRAINT fk_cr_creator FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
-          KEY cr_task_idx (task_id),
-          KEY cr_type_idx (type),
-          KEY cr_last_msg_idx (last_message_at)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table chat_rooms');
-    }
-
-    if (!tables.includes('chat_room_members')) {
-      await sequelize.query(`
-        CREATE TABLE chat_room_members (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          room_id INT NOT NULL,
-          user_id INT NOT NULL,
-          last_read_at DATETIME NULL,
-          muted TINYINT(1) NOT NULL DEFAULT 0,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_crm_room FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_crm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE KEY crm_room_user_unique (room_id, user_id),
-          KEY crm_user_idx (user_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table chat_room_members');
-    }
-
-    if (!tables.includes('chat_messages')) {
-      await sequelize.query(`
-        CREATE TABLE chat_messages (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          room_id INT NOT NULL,
-          sender_user_id INT NOT NULL,
-          body TEXT NOT NULL,
-          message_type ENUM('text','image','file','system') NOT NULL DEFAULT 'text',
-          reply_to_id INT NULL,
-          edited_at DATETIME NULL,
-          deleted_at DATETIME NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_cm_room FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_cm_sender FOREIGN KEY (sender_user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
-          CONSTRAINT fk_cm_reply FOREIGN KEY (reply_to_id) REFERENCES chat_messages(id) ON DELETE SET NULL ON UPDATE CASCADE,
-          KEY cm_room_created_idx (room_id, created_at),
-          KEY cm_sender_idx (sender_user_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table chat_messages');
-    }
-
-    // Add late columns to chat_messages
     try {
-      const cmCols = await qi.describeTable('chat_messages');
-      if (!cmCols.pinned_at) {
-        await sequelize.query('ALTER TABLE chat_messages ADD COLUMN pinned_at DATETIME NULL');
-        logger.info('[schema] Added column chat_messages.pinned_at');
+      await addColumnIfMissing('tasks', 'show_collaborators', 'BOOLEAN NOT NULL DEFAULT TRUE');
+      await addColumnIfMissing('tasks', 'escalation_level', 'INTEGER NOT NULL DEFAULT 0');
+      await addColumnIfMissing('tasks', 'last_escalation_at', 'TIMESTAMP WITH TIME ZONE NULL');
+    } catch (e) {
+      console.log('[schema] tasks columns check skipped:', e.message);
+    }
+
+    // Create tables if they don't exist (PostgreSQL syntax)
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS task_assignments (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE (task_id, user_id)
+      )
+    `);
+
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS task_dependencies (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        depends_on_task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE (task_id, depends_on_task_id)
+      )
+    `);
+
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS task_attachments (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        uploaded_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        original_name VARCHAR(255) NOT NULL,
+        stored_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NULL,
+        file_size INTEGER NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    try { await sequelize.query('CREATE INDEX IF NOT EXISTS idx_task_attachments_task_id ON task_attachments(task_id)'); } catch (_) {}
+
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS system_configs (
+        id SERIAL PRIMARY KEY,
+        key VARCHAR(100) NOT NULL UNIQUE,
+        value TEXT NOT NULL,
+        description VARCHAR(255) NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    // Seed system_configs if empty
+    try {
+      const [rows] = await sequelize.query('SELECT COUNT(*) AS cnt FROM system_configs');
+      if (parseInt(rows[0].cnt, 10) === 0) {
+        await sequelize.query(`INSERT INTO system_configs (key, value, description) VALUES
+          ('multi_company_users', 'false', 'Allow users to belong to multiple companies'),
+          ('multi_location_users', 'false', 'Allow users to belong to multiple locations')`);
       }
-      if (!cmCols.pinned_by_user_id) {
-        await sequelize.query('ALTER TABLE chat_messages ADD COLUMN pinned_by_user_id INT NULL');
-        logger.info('[schema] Added column chat_messages.pinned_by_user_id');
-      }
-      if (!cmCols.forwarded_from_message_id) {
-        await sequelize.query('ALTER TABLE chat_messages ADD COLUMN forwarded_from_message_id INT NULL');
-        logger.info('[schema] Added column chat_messages.forwarded_from_message_id');
-      }
-      // Extend message_type enum to include 'audio' for voice notes
-      try {
-        await sequelize.query(
-          "ALTER TABLE chat_messages MODIFY COLUMN message_type ENUM('text','image','file','audio','system') NOT NULL DEFAULT 'text'"
-        );
-      } catch (_) {}
     } catch (_) {}
 
-    if (!tables.includes('chat_message_reactions')) {
-      await sequelize.query(`
-        CREATE TABLE chat_message_reactions (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          message_id INT NOT NULL,
-          user_id INT NOT NULL,
-          emoji VARCHAR(16) NOT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_cmr_msg FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_cmr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE KEY cmr_unique (message_id, user_id, emoji),
-          KEY cmr_msg_idx (message_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table chat_message_reactions');
-    }
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS user_companies (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, company_id)
+      )
+    `);
 
-    if (!tables.includes('chat_attachments')) {
-      await sequelize.query(`
-        CREATE TABLE chat_attachments (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          message_id INT NOT NULL,
-          uploaded_by_user_id INT NOT NULL,
-          original_name VARCHAR(255) NOT NULL,
-          stored_name VARCHAR(255) NOT NULL,
-          mime_type VARCHAR(100) NULL,
-          file_size INT NULL,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_chatatt_msg FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_chatatt_user FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
-          KEY ca_message_idx (message_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table chat_attachments');
-    }
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS user_locations (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+        is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, location_id)
+      )
+    `);
 
-    if (!tables.includes('user_locations')) {
-      await sequelize.query(`
-        CREATE TABLE user_locations (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          user_id INT NOT NULL,
-          location_id INT NOT NULL,
-          is_primary TINYINT(1) NOT NULL DEFAULT 0,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          CONSTRAINT fk_ul_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT fk_ul_location FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE KEY ul_user_location_unique (user_id, location_id)
-        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-      `);
-      logger.info('[schema] Created table user_locations');
-    }
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS chat_rooms (
+        id SERIAL PRIMARY KEY,
+        type chat_room_type NOT NULL DEFAULT 'direct',
+        task_id INTEGER NULL REFERENCES tasks(id) ON DELETE SET NULL,
+        name VARCHAR(255) NULL,
+        created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        last_message_at TIMESTAMP WITH TIME ZONE NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    try {
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_chat_rooms_task_id ON chat_rooms(task_id)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_chat_rooms_type ON chat_rooms(type)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_chat_rooms_last_msg ON chat_rooms(last_message_at)');
+    } catch (_) {}
+
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS chat_room_members (
+        id SERIAL PRIMARY KEY,
+        room_id INTEGER NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        last_read_at TIMESTAMP WITH TIME ZONE NULL,
+        muted BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE (room_id, user_id)
+      )
+    `);
+    try { await sequelize.query('CREATE INDEX IF NOT EXISTS idx_chat_room_members_user ON chat_room_members(user_id)'); } catch (_) {}
+
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        room_id INTEGER NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
+        sender_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        body TEXT NOT NULL,
+        message_type chat_message_type NOT NULL DEFAULT 'text',
+        reply_to_id INTEGER NULL,
+        edited_at TIMESTAMP WITH TIME ZONE NULL,
+        deleted_at TIMESTAMP WITH TIME ZONE NULL,
+        pinned_at TIMESTAMP WITH TIME ZONE NULL,
+        pinned_by_user_id INTEGER NULL,
+        forwarded_from_message_id INTEGER NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    try {
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created ON chat_messages(room_id, created_at)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_user_id)');
+      // Add self-referencing FK after table exists
+      await sequelize.query(`DO $$ BEGIN
+        ALTER TABLE chat_messages ADD CONSTRAINT fk_cm_reply FOREIGN KEY (reply_to_id) REFERENCES chat_messages(id) ON DELETE SET NULL;
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;`);
+    } catch (_) {}
+
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS chat_message_reactions (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        emoji VARCHAR(16) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE (message_id, user_id, emoji)
+      )
+    `);
+    try { await sequelize.query('CREATE INDEX IF NOT EXISTS idx_chat_msg_reactions_msg ON chat_message_reactions(message_id)'); } catch (_) {}
+
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS chat_attachments (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+        uploaded_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        original_name VARCHAR(255) NOT NULL,
+        stored_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NULL,
+        file_size INTEGER NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    try { await sequelize.query('CREATE INDEX IF NOT EXISTS idx_chat_attachments_msg ON chat_attachments(message_id)'); } catch (_) {}
 
     console.log('[STARTUP] ensureSchema complete');
   } catch (err) {
